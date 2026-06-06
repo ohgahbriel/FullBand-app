@@ -27,6 +27,9 @@ let pollTimer = null;
 let rafId = null;
 let peaks = new Float32Array(PEAK_BINS);
 let seeking = false;
+let currentJob = null;   // {id, title, beats, ...}
+let beats = [];          // beat times (s) for the visual metronome
+let lastBeat = -1;       // last beat index pulsed
 
 // --- backend config (tap either device chip to change it) -----------------
 async function refreshHealth() {
@@ -102,6 +105,9 @@ async function loadStems(job) {
   const stems = job.stems.map((s) => ({ name: s.name, url: BACKEND + s.url }));
   await mixer.load(stems, (done, total) => setStatus(`Loading stems… ${done}/${total}`));
   peaks = mixer.getPeaks(PEAK_BINS);
+  currentJob = job;
+  beats = job.beats || [];
+  lastBeat = -1;
 
   buildStrips();
   $("nowPlaying").textContent = job.title || "Untitled";
@@ -145,6 +151,13 @@ function buildStrips() {
       el.classList.toggle("solo-on", on);
     });
     wrap.appendChild(el);
+
+    // Click starts muted: the metronome is visual by default, and the saved
+    // mix stays clean. Unmute it to hear the beat.
+    if (t.name === "click") {
+      const muted = mixer.toggleMute("click");
+      el.querySelector(".mute").classList.toggle("on", muted);
+    }
   }
 }
 
@@ -162,6 +175,7 @@ $("playPause").addEventListener("click", async () => {
 });
 $("restart").addEventListener("click", () => {
   mixer.seek(0);
+  lastBeat = 0;
   if (!mixer.playing) { updateClock(); drawWave(0); }
 });
 $("back").addEventListener("click", () => {
@@ -173,6 +187,57 @@ $("back").addEventListener("click", () => {
 });
 $("master").addEventListener("input", (e) =>
   mixer.setMasterVolume(parseFloat(e.target.value)));
+
+// --- export ---------------------------------------------------------------
+$("saveMix").addEventListener("click", async () => {
+  if (!currentJob) return;
+  const fmt = $("fmt").value;
+  const { gains, master } = mixer.effectiveGains();
+  await runExport(`Rendering ${fmt.toUpperCase()} mix…`, `(mix).${fmt}`, () =>
+    fetch(`${BACKEND}/api/jobs/${currentJob.id}/mix`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ format: fmt, gains, master }),
+    }));
+});
+
+$("saveZip").addEventListener("click", async () => {
+  if (!currentJob) return;
+  await runExport("Zipping stems…", "stems.zip", () =>
+    fetch(`${BACKEND}/api/jobs/${currentJob.id}/zip`));
+});
+
+async function runExport(busyMsg, suffix, request) {
+  const buttons = [$("saveMix"), $("saveZip")];
+  buttons.forEach((b) => (b.disabled = true));
+  exportMsg(busyMsg);
+  try {
+    const res = await request();
+    if (!res.ok) throw new Error((await res.text().catch(() => "")) || res.statusText);
+    const blob = await res.blob();
+    const base = (currentJob.title || "fullband").replace(/[<>:"/\\|?*]+/g, " ").trim();
+    downloadBlob(blob, `${base} ${suffix}`);
+    exportMsg("Saved ✓");
+    setTimeout(() => exportMsg(""), 2500);
+  } catch (err) {
+    exportMsg(`Export failed: ${err.message}`);
+  } finally {
+    buttons.forEach((b) => (b.disabled = false));
+  }
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportMsg(msg) { $("exportMsg").textContent = msg; }
 
 mixer.onended = () => {
   $("playPause").textContent = "▶";
@@ -186,14 +251,42 @@ $("wave").addEventListener("click", (e) => {
   const rect = e.currentTarget.getBoundingClientRect();
   const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
   mixer.seek(ratio * mixer.duration);
+  lastBeat = beatIndexAt(mixer.currentTime());
   updateClock();
   drawWave(ratio);
 });
 
 function tick() {
+  const t = mixer.currentTime();
   updateClock();
-  drawWave(mixer.duration ? mixer.currentTime() / mixer.duration : 0);
+  drawWave(mixer.duration ? t / mixer.duration : 0);
+  updateMetronome(t);
   if (mixer.playing) rafId = requestAnimationFrame(tick);
+}
+
+// Count of beats at or before time t (the current beat index).
+function beatIndexAt(t) {
+  let i = 0;
+  while (i < beats.length && beats[i] <= t) i++;
+  return i;
+}
+
+function updateMetronome(t) {
+  if (!beats.length) return;
+  const idx = beatIndexAt(t);
+  if (idx !== lastBeat) {
+    if (idx > lastBeat && idx > 0) pulseBeat(idx - 1); // crossed onto a new beat
+    lastBeat = idx;
+  }
+}
+
+const beatDot = $("beatDot");
+let beatClear = null;
+function pulseBeat(n) {
+  beatDot.classList.add("hit");
+  beatDot.classList.toggle("down", n % 4 === 0); // accent the downbeat (assume 4/4)
+  clearTimeout(beatClear);
+  beatClear = setTimeout(() => beatDot.classList.remove("hit"), 110);
 }
 
 function updateClock() {

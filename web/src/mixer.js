@@ -114,6 +114,18 @@ export class Mixer {
 
   _track(name) { return this.tracks.find((t) => t.name === name); }
 
+  // The effective per-track gain the user is hearing right now (mute/solo
+  // resolved, times volume), plus master. Used to render the mix server-side.
+  effectiveGains() {
+    const anySolo = this.tracks.some((t) => t.solo);
+    const gains = {};
+    for (const t of this.tracks) {
+      const audible = anySolo ? (t.solo && !t.muted) : !t.muted;
+      gains[t.name] = audible ? t.volume : 0;
+    }
+    return { gains, master: this.master.gain.value };
+  }
+
   // Approximate mix waveform: per-bin peak amplitude summed across stems,
   // normalised to 0..1. Computed once after load for the waveform display.
   getPeaks(bins) {

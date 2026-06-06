@@ -116,6 +116,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .chip-k { color: var(--muted); font-size: 11px; letter-spacing: 1px; font-weight: 700; }
 
+/* visual metronome */
+.beat-dot {
+  width: 13px; height: 13px; border-radius: 50%;
+  background: #2c344a; transition: transform .06s ease, background .06s ease;
+}
+.beat-dot.hit { background: var(--accent-blue); transform: scale(1.45); }
+.beat-dot.hit.down { background: var(--accent); transform: scale(1.7); }
+
+.ib-spacer { flex: 1 1 auto; }
+.export-msg { color: var(--muted); font-size: 13px; }
+.fmt {
+  padding: 7px 10px; border-radius: 9px; background: var(--panel);
+  color: var(--text); border: 1px solid var(--line); font: inherit; font-size: 13px;
+}
+.exp {
+  padding: 8px 14px; border-radius: 9px; font-weight: 700; font-size: 13px;
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+}
+.exp:hover { border-color: var(--accent); }
+.exp:disabled { opacity: .5; }
+@media (max-width: 720px) { .ib-spacer { flex-basis: 100%; height: 0; } .infobar { flex-wrap: wrap; } }
+
 /* ===== Mixer ===== */
 .mixer {
   display: flex; align-items: stretch; gap: 0;

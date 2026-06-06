@@ -24,6 +24,7 @@ class Job:
     title: str = ""
     bpm: float = 0.0                # detected tempo, 0 if analysis failed
     key: str = ""                   # detected key, e.g. "C maj", "" if unknown
+    beats: list[float] = field(default_factory=list)  # beat times, seconds
     stems: list[dict] = field(default_factory=list)  # [{name, url}]
     error: str = ""
 
@@ -156,9 +157,10 @@ def analyze(job: Job, source: Path) -> None:
         y, sr = librosa.load(str(source), mono=True)  # 22.05 kHz mono
         duration = librosa.get_duration(y=y, sr=sr)
 
-        tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
+        tempo, beats = librosa.beat.beat_track(y=y, sr=sr, trim=False)
         job.bpm = round(float(np.atleast_1d(tempo)[0]))
         beat_times = librosa.frames_to_time(beats, sr=sr)
+        job.beats = [round(float(t), 3) for t in beat_times]
         job.key = _estimate_key(y, sr)
 
         # Full-length click track at a clean 44.1 kHz, encoded like the stems.

@@ -100,6 +100,21 @@ Paste a YouTube URL and hit **Separate**. The first run downloads the Demucs
 model weights, so it's slower; after that a song takes seconds–minutes
 depending on length.
 
+### Mixer features
+- **Per-stem faders** with mute / solo, master, full-width waveform (click to seek).
+- **Visual metronome** — the BEAT dot pulses on each detected beat (downbeats
+  accented), locked to the analysed beat times. The audible **Click** channel
+  starts muted; unmute its fader to hear it.
+- **Save mix** — renders the *current* mix (your fader/mute/solo levels) to
+  **MP3 / WAV / FLAC / OGG / M4A** via ffmpeg and downloads it. Default levels
+  reproduce the original (stems sum with `amix … normalize=0`).
+- **Stems .zip** — downloads every separated stem in one zip.
+
+> Source separation gives a **fixed** stem set (vocals / drums / bass / guitar /
+> piano / other). It cannot split *one* guitar into "guitar 1 / 2 / solo", nor
+> *lead vs backing* vocals — those need the original multitracks, which don't
+> exist for an arbitrary YouTube song.
+
 ## 4. Android app
 
 The phone runs the same UI but must reach the backend over Wi-Fi, so point it
