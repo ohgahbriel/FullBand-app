@@ -45,6 +45,26 @@ export class Mixer {
     this._offset = 0;
   }
 
+  // Replace each track's audio buffer (matched by name) with a new one — e.g.
+  // pitch/tempo-shifted renders — keeping volume/mute/solo. Resumes at `offset`
+  // (seconds in the NEW timeline) and keeps playing if it was.
+  async swapBuffers(stems, offset, onProgress) {
+    const wasPlaying = this.playing;
+    this.stop();
+    let done = 0;
+    this.duration = 0;
+    for (const { name, url } of stems) {
+      const buf = await fetch(url).then((r) => r.arrayBuffer());
+      const audio = await this.ctx.decodeAudioData(buf);
+      const t = this._track(name);
+      if (t) t.buffer = audio;
+      this.duration = Math.max(this.duration, audio.duration);
+      onProgress?.(++done, stems.length);
+    }
+    this._offset = Math.max(0, Math.min(offset, this.duration));
+    if (wasPlaying) this.play();
+  }
+
   _buildSources(offset) {
     for (const t of this.tracks) {
       const src = this.ctx.createBufferSource();

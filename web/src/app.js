@@ -28,8 +28,16 @@ let rafId = null;
 let peaks = new Float32Array(PEAK_BINS);
 let seeking = false;
 let currentJob = null;   // {id, title, beats, ...}
-let beats = [];          // beat times (s) for the visual metronome
+let beats = [];          // beat times (s) in the CURRENT timeline (tempo-scaled)
 let lastBeat = -1;       // last beat index pulsed
+
+// transpose + tempo
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+let semitones = 0;       // requested transpose
+let tempoMult = 1.0;     // requested tempo (1.0 = original)
+let appliedTempo = 1.0;  // tempo currently loaded in the mixer
+let origBpm = 0, origKey = "", origBeats = [];
+let shiftTimer = null, renderToken = 0;
 
 // --- backend config (tap either device chip to change it) -----------------
 async function refreshHealth() {
@@ -106,13 +114,16 @@ async function loadStems(job) {
   await mixer.load(stems, (done, total) => setStatus(`Loading stems… ${done}/${total}`));
   peaks = mixer.getPeaks(PEAK_BINS);
   currentJob = job;
-  beats = job.beats || [];
+  origBeats = job.beats || [];
+  origBpm = job.bpm || 0;
+  origKey = job.key || "";
+  semitones = 0; tempoMult = 1.0; appliedTempo = 1.0;
+  beats = origBeats;
   lastBeat = -1;
 
   buildStrips();
   $("nowPlaying").textContent = job.title || "Untitled";
-  $("key").textContent = job.key || "—";
-  $("bpm").textContent = job.bpm ? Math.round(job.bpm) : "—";
+  updateShiftDisplays();
   $("remain").textContent = "-" + fmt(mixer.duration);
   $("elapsed").textContent = "0:00";
 
@@ -197,7 +208,7 @@ $("saveMix").addEventListener("click", async () => {
     fetch(`${BACKEND}/api/jobs/${currentJob.id}/mix`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ format: fmt, gains, master }),
+      body: JSON.stringify({ format: fmt, gains, master, semitones, tempo: tempoMult }),
     }));
 });
 
@@ -238,6 +249,72 @@ function downloadBlob(blob, filename) {
 }
 
 function exportMsg(msg) { $("exportMsg").textContent = msg; }
+
+// --- transpose + tempo ----------------------------------------------------
+$("keyUp").addEventListener("click", () => stepKey(1));
+$("keyDown").addEventListener("click", () => stepKey(-1));
+$("tempoUp").addEventListener("click", () => stepTempo(0.05));
+$("tempoDown").addEventListener("click", () => stepTempo(-0.05));
+$("key").addEventListener("dblclick", () => { semitones = 0; afterShiftChange(); });
+$("bpm").addEventListener("dblclick", () => { tempoMult = 1.0; afterShiftChange(); });
+
+function stepKey(d) { semitones = clamp(semitones + d, -7, 7); afterShiftChange(); }
+function stepTempo(d) {
+  tempoMult = clamp(Math.round((tempoMult + d) * 100) / 100, 0.5, 1.5);
+  afterShiftChange();
+}
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// Update the readouts immediately; debounce the (heavier) server render.
+function afterShiftChange() {
+  updateShiftDisplays();
+  clearTimeout(shiftTimer);
+  shiftTimer = setTimeout(doRender, 450);
+}
+
+function shiftKeyName(key, semis) {
+  if (!key) return "—";
+  const [root, mode] = key.split(" ");
+  const i = NOTE_NAMES.indexOf(root);
+  if (i < 0) return key;
+  const n = ((i + semis) % 12 + 12) % 12;
+  return NOTE_NAMES[n] + (mode ? " " + mode : "");
+}
+
+function updateShiftDisplays() {
+  const keyEl = $("key"), bpmEl = $("bpm");
+  const label = shiftKeyName(origKey, semitones);
+  keyEl.textContent = semitones ? `${label} (${semitones > 0 ? "+" : ""}${semitones})` : label;
+  keyEl.classList.toggle("shifted", semitones !== 0);
+  bpmEl.textContent = origBpm ? Math.round(origBpm * tempoMult) : "—";
+  bpmEl.classList.toggle("shifted", Math.abs(tempoMult - 1) > 1e-3);
+}
+
+async function doRender() {
+  if (!currentJob) return;
+  const token = ++renderToken;
+  const sReq = semitones, tReq = tempoMult;
+  const identity = sReq === 0 && Math.abs(tReq - 1) < 1e-3;
+  exportMsg(identity ? "Resetting…" : "Re-pitching…");
+  try {
+    const url = `${BACKEND}/api/jobs/${currentJob.id}/render?semitones=${sReq}&tempo=${tReq.toFixed(3)}`;
+    const data = await fetch(url).then((r) => { if (!r.ok) throw new Error("render failed"); return r.json(); });
+    if (token !== renderToken) return;                       // a newer change superseded us
+    const stems = data.stems.map((s) => ({ name: s.name, url: BACKEND + s.url }));
+    const musical = mixer.currentTime() * appliedTempo;      // seconds in the original timeline
+    await mixer.swapBuffers(stems, musical / tReq, () => {});
+    if (token !== renderToken) return;
+    appliedTempo = tReq;
+    peaks = mixer.getPeaks(PEAK_BINS);
+    beats = origBeats.map((b) => b / tReq);
+    lastBeat = beatIndexAt(mixer.currentTime());
+    updateClock();
+    drawWave(mixer.duration ? mixer.currentTime() / mixer.duration : 0);
+    exportMsg("");
+  } catch (err) {
+    if (token === renderToken) exportMsg("Re-pitch failed");
+  }
+}
 
 mixer.onended = () => {
   $("playPause").textContent = "▶";

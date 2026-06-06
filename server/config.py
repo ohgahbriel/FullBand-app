@@ -31,6 +31,11 @@ SEGMENT = int(os.getenv("FULLBAND_SEGMENT", "7"))
 OUTPUT_FORMAT = os.getenv("FULLBAND_FORMAT", "mp3")
 MP3_BITRATE = int(os.getenv("FULLBAND_MP3_BITRATE", "256"))
 
+# Pitch/tempo shift engine for transpose + tempo. "rubberband" = high quality
+# (needs ffmpeg built with librubberband); "fast" = asetrate+atempo (lower
+# quality, much faster). Stems are 44.1 kHz.
+SHIFT_ENGINE = os.getenv("FULLBAND_SHIFT", "rubberband")
+
 # Network bind. 0.0.0.0 so a phone on the same Wi-Fi can reach it.
 HOST = os.getenv("FULLBAND_HOST", "0.0.0.0")
 PORT = int(os.getenv("FULLBAND_PORT", "8000"))

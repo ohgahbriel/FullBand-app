@@ -124,6 +124,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .beat-dot.hit { background: var(--accent-blue); transform: scale(1.45); }
 .beat-dot.hit.down { background: var(--accent); transform: scale(1.7); }
 
+/* transpose / tempo steppers */
+.stepper { gap: 9px; }
+.step {
+  width: 24px; height: 24px; border-radius: 7px; font-size: 16px; font-weight: 700;
+  line-height: 1; background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center;
+}
+.step:hover { border-color: var(--accent); }
+.step:active { transform: scale(.92); }
+.step-val { min-width: 52px; text-align: center; cursor: pointer; }
+.step-val.shifted { color: var(--accent); }
+
 .ib-spacer { flex: 1 1 auto; }
 .export-msg { color: var(--muted); font-size: 13px; }
 .fmt {

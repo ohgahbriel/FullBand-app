@@ -105,6 +105,13 @@ depending on length.
 - **Visual metronome** — the BEAT dot pulses on each detected beat (downbeats
   accented), locked to the analysed beat times. The audible **Click** channel
   starts muted; unmute its fader to hear it.
+- **Transpose + tempo** (independent) — the KEY −/+ and BPM −/+ steppers change
+  pitch and speed separately (transpose ±7 semitones, tempo 0.5×–1.5×). Stems
+  are re-rendered server-side with ffmpeg's **rubberband** (high quality),
+  cached per setting, and swapped into the running mixer with faders + position
+  preserved. Double-click the KEY or BPM value to reset that axis. First render
+  of a new setting takes a few seconds on a full song; cached settings are
+  instant. (`FULLBAND_SHIFT=fast` uses a quicker, lower-quality engine.)
 - **Save mix** — renders the *current* mix (your fader/mute/solo levels) to
   **MP3 / WAV / FLAC / OGG / M4A** via ffmpeg and downloads it. Default levels
   reproduce the original (stems sum with `amix … normalize=0`).

@@ -42,8 +42,18 @@
 
       <div class="infobar">
         <span class="chip metro"><span id="beatDot" class="beat-dot"></span> <span class="chip-k">BEAT</span></span>
-        <span class="chip"><span class="chip-k">KEY</span> <span id="key">—</span></span>
-        <span class="chip"><span id="bpm">—</span> <span class="chip-k">BPM</span></span>
+        <span class="chip stepper">
+          <span class="chip-k">KEY</span>
+          <button id="keyDown" class="step" title="Transpose down a semitone">−</button>
+          <span id="key" class="step-val" title="Double-click to reset">—</span>
+          <button id="keyUp" class="step" title="Transpose up a semitone">+</button>
+        </span>
+        <span class="chip stepper">
+          <button id="tempoDown" class="step" title="Slower">−</button>
+          <span id="bpm" class="step-val" title="Double-click to reset">—</span>
+          <span class="chip-k">BPM</span>
+          <button id="tempoUp" class="step" title="Faster">+</button>
+        </span>
         <span class="ib-spacer"></span>
         <span id="exportMsg" class="export-msg"></span>
         <select id="fmt" class="fmt" title="mix format">
