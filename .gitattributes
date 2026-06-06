@@ -1,0 +1,4 @@
+# Windows batch files must use CRLF, or cmd.exe mis-parses them
+# ("'X' is not recognized..." errors and @echo off being ignored).
+*.bat text eol=crlf
+*.cmd text eol=crlf
