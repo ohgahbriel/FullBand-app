@@ -36,8 +36,15 @@ pip install -r requirements.txt
 python main.py
 ```
 
-The server listens on `http://0.0.0.0:8000`. Confirm CUDA is picked up at
-`http://localhost:8000/api/health` → it should report `"device": "cuda"`.
+The server listens on `http://0.0.0.0:8000` (IPv4). Confirm CUDA is picked up at
+`http://127.0.0.1:8000/api/health` → it should report `"device": "cuda"`.
+(Use `127.0.0.1`, not `localhost`: on Windows `localhost` resolves to IPv6 and
+won't reach an IPv4-only bind.)
+
+> This machine has `CUDA_VISIBLE_DEVICES=-1` set globally, which hides the GPU
+> from CUDA. `config.py` overrides it to `0` at startup, so the backend uses the
+> card anyway. If you ever see `"device": "cpu"` despite a working GPU, that
+> env var (set to `-1` or empty) is the usual culprit.
 
 > The GTX 980M has 4 GB VRAM. `config.py` defaults `FULLBAND_SEGMENT=7` to fit.
 > If you hit out-of-memory, lower it (`$env:FULLBAND_SEGMENT=5`); raise it on a

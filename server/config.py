@@ -6,6 +6,12 @@ runs on a beefy desktop GPU or a CPU-only laptop without edits.
 import os
 from pathlib import Path
 
+# This machine ships with CUDA_VISIBLE_DEVICES=-1, which hides every GPU from
+# CUDA. Unless the user has deliberately selected a specific device, claim GPU 0
+# so Demucs can use the card. Must run before torch is imported anywhere.
+if os.environ.get("CUDA_VISIBLE_DEVICES", "-1") in ("", "-1"):
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 # Where downloaded audio + separated stems are stored. One subfolder per job.
 DATA_DIR = Path(os.getenv("FULLBAND_DATA", Path(__file__).parent / "data")).resolve()
 
