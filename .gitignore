@@ -1,0 +1,16 @@
+# Backend
+server/data/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Web
+web/node_modules/
+web/dist/
+web/android/
+web/.vite/
+
+# OS / editor
+.DS_Store
+Thumbs.db

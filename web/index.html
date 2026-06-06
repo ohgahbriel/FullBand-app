@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0c0d12" />
+    <title>FullBand</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Full<span>Band</span></h1>
+      <span id="device" class="device" title="separation backend"></span>
+    </header>
+
+    <main>
+      <form id="urlForm" class="url-row">
+        <input id="url" type="url" inputmode="url" placeholder="Paste a YouTube link…" autocomplete="off" />
+        <button id="go" type="submit">Separate</button>
+      </form>
+
+      <p id="status" class="status"></p>
+      <div id="progressWrap" class="progress-wrap" hidden>
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+
+      <section id="player" class="player" hidden>
+        <div id="nowPlaying" class="now-playing"></div>
+
+        <div class="transport">
+          <button id="playPause" class="play-btn">▶</button>
+          <span id="time" class="time">0:00</span>
+          <input id="seek" class="seek" type="range" min="0" max="1000" value="0" />
+          <span id="dur" class="time">0:00</span>
+        </div>
+
+        <div class="master">
+          <label>Master</label>
+          <input id="master" type="range" min="0" max="1" step="0.01" value="1" />
+        </div>
+
+        <div id="tracks" class="tracks"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "fullband-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "FullBand mixer UI — runs in the browser and as the Capacitor Android app.",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "cap:add": "cap add android",
+    "cap:sync": "vite build && cap sync android"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0",
+    "@capacitor/cli": "^6.2.0"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/android": "^6.2.0"
+  }
+}

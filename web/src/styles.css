@@ -1,0 +1,106 @@
+:root {
+  --bg: #0c0d12;
+  --panel: #161823;
+  --panel-2: #1e2130;
+  --accent: #6c8cff;
+  --accent-2: #4ad6c0;
+  --text: #e8eaf2;
+  --muted: #8b90a6;
+  --danger: #ff6b6b;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: radial-gradient(1200px 600px at 50% -10%, #1a1d2e 0%, var(--bg) 60%);
+  color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; gap: 12px;
+}
+h1 { font-size: 22px; letter-spacing: 0.5px; margin: 0; font-weight: 800; }
+h1 span { color: var(--accent); }
+.device {
+  font-size: 12px; color: var(--muted); cursor: pointer;
+  border: 1px solid #2a2e42; border-radius: 999px; padding: 4px 10px;
+}
+.device.gpu { color: var(--accent-2); border-color: var(--accent-2); }
+main { max-width: 720px; margin: 0 auto; padding: 8px 16px 48px; }
+
+.url-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.url-row input {
+  flex: 1; background: var(--panel); border: 1px solid #2a2e42; color: var(--text);
+  border-radius: 12px; padding: 14px 16px; font-size: 16px; outline: none;
+}
+.url-row input:focus { border-color: var(--accent); }
+.url-row button {
+  background: var(--accent); color: #0b0d16; border: 0; border-radius: 12px;
+  padding: 0 20px; font-weight: 700; font-size: 15px; cursor: pointer;
+}
+.url-row button:disabled { opacity: 0.5; cursor: default; }
+
+.status { color: var(--muted); min-height: 20px; margin: 4px 2px; }
+.status.error { color: var(--danger); }
+.progress-wrap {
+  height: 6px; background: var(--panel); border-radius: 999px; overflow: hidden;
+  margin: 6px 0 16px;
+}
+.progress-bar {
+  height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.3s ease;
+}
+
+.player {
+  background: var(--panel); border: 1px solid #232740; border-radius: 18px;
+  padding: 18px; margin-top: 12px;
+}
+.now-playing { font-weight: 600; margin-bottom: 14px; color: var(--text); }
+
+.transport { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.play-btn {
+  width: 52px; height: 52px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--accent); color: #0b0d16; font-size: 20px; flex: none;
+}
+.time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.seek { flex: 1; }
+
+.master {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 18px;
+  padding-bottom: 16px; border-bottom: 1px solid #232740;
+}
+.master label { font-size: 13px; color: var(--muted); width: 56px; }
+.master input { flex: 1; }
+
+.tracks { display: grid; gap: 12px; }
+.track {
+  display: grid; grid-template-columns: 120px 1fr auto; align-items: center; gap: 12px;
+  background: var(--panel-2); border-radius: 12px; padding: 12px 14px;
+}
+.track-head { display: flex; align-items: center; gap: 8px; }
+.track-icon { font-size: 18px; }
+.track-name { text-transform: capitalize; font-weight: 600; }
+.track-btns { display: flex; gap: 6px; }
+.track-btns button {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid #2f3450;
+  background: transparent; color: var(--muted); font-weight: 700; cursor: pointer;
+}
+.track-btns .mute.on { background: var(--danger); color: #160a0a; border-color: var(--danger); }
+.track-btns .solo.on { background: var(--accent-2); color: #06140f; border-color: var(--accent-2); }
+
+input[type="range"] {
+  -webkit-appearance: none; appearance: none; height: 6px; border-radius: 999px;
+  background: #2a2e42; outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent); cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--accent); cursor: pointer;
+}
+
+@media (max-width: 520px) {
+  .track { grid-template-columns: 92px 1fr auto; }
+}
