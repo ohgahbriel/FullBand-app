@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>FullBand</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: radial-gradient(900px 500px at 50% -10%, #131a2b 0%, #0a0d16 60%);
+        color: #e8ecf6; font: 16px/1.5 "Segoe UI", system-ui, sans-serif;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+      }
+      .logo { font-size: 38px; font-weight: 800; letter-spacing: -1px; }
+      .logo span { color: #f0a44a; }
+      .sub { color: #8b93a7; }
+      .spinner {
+        width: 34px; height: 34px; border-radius: 50%;
+        border: 3px solid #232b3d; border-top-color: #f0a44a;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div class="logo">Full<span>Band</span></div>
+    <div class="spinner"></div>
+    <div class="sub">Starting the separation engine…</div>
+  </body>
+</html>

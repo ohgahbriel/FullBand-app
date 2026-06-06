@@ -1,0 +1,13 @@
+{
+  "name": "fullband-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FullBand desktop app — wraps the mixer UI and auto-starts the local GPU backend.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}

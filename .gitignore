@@ -11,6 +11,13 @@ web/dist/
 web/android/
 web/.vite/
 
+# Desktop (Electron)
+desktop/node_modules/
+desktop/dist/
+
+# Build artifacts
+artifacts/
+
 # OS / editor
 .DS_Store
 Thumbs.db

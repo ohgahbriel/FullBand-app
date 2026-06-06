@@ -18,9 +18,13 @@ FullBand is **client–server**:
 ```
 
 - **`server/`** — FastAPI service. Runs on the machine with the NVIDIA GPU.
-  Downloads the audio, separates it with Demucs, serves the stems.
+  Downloads the audio, separates it with Demucs, serves the stems **and** the
+  built web UI (so the desktop app gets UI + API on one origin).
 - **`web/`** — one Web Audio mixer UI. Runs in a browser on the PC, **and** is
   wrapped into an Android APK with Capacitor (built in GitHub Actions).
+- **`desktop/`** — an Electron shell that auto-starts the backend and opens the
+  mixer in a native window. This is the **Windows program** — one double-click,
+  no terminal, no browser (everything is local on the GPU PC).
 
 ## 1. Backend (GPU PC)
 
@@ -53,13 +57,38 @@ won't reach an IPv4-only bind.)
 ### Backend env knobs
 | Variable | Default | Meaning |
 |---|---|---|
-| `FULLBAND_MODEL` | `htdemucs` | `htdemucs_6s` adds guitar + piano stems |
+| `FULLBAND_MODEL` | `htdemucs_6s` | 6 stems (vocals/drums/bass/guitar/piano/other); `htdemucs` = 4, faster |
 | `FULLBAND_DEVICE` | auto | `cuda` / `cpu` |
 | `FULLBAND_SEGMENT` | `7` | Demucs segment length (VRAM vs speed) |
 | `FULLBAND_FORMAT` | `mp3` | `mp3` (small, for LAN/phone) or `wav` |
 | `FULLBAND_PORT` | `8000` | listen port |
 
-## 2. Mixer UI in the browser
+## 2. Desktop app (Windows) — the easy way
+
+A one-double-click program: an Electron window that auto-starts the backend and
+opens the mixer locally. Requires the `server/.venv` from step 1.
+
+```powershell
+cd web && npm install && npm run build   # build the UI the backend serves
+cd ../desktop && npm install             # one-time: fetch Electron
+```
+
+Then launch by **double-clicking `FullBand.bat`** (repo root), or:
+
+```powershell
+cd desktop
+npm start
+```
+
+The app spawns the local backend, waits for it, and loads the mixer — no browser,
+no LAN setup (it talks to `localhost:8000`). Closing the window stops the backend.
+
+> Built UI changes? Re-run `npm run build` in `web/` (the backend serves
+> `web/dist`). If Electron exits instantly with an `app is undefined` error,
+> something set `ELECTRON_RUN_AS_NODE=1` (VS Code's terminal does) — `FullBand.bat`
+> clears it; in a raw shell run `$env:ELECTRON_RUN_AS_NODE=$null` first.
+
+## 3. Mixer UI in the browser
 
 ```powershell
 cd web
@@ -68,10 +97,10 @@ npm run dev   # open the printed http://localhost:5173
 ```
 
 Paste a YouTube URL and hit **Separate**. The first run downloads the Demucs
-model weights (~80 MB), so it's slower; after that a song takes seconds–minutes
+model weights, so it's slower; after that a song takes seconds–minutes
 depending on length.
 
-## 3. Android app
+## 4. Android app
 
 The phone runs the same UI but must reach the backend over Wi-Fi, so point it
 at the PC's LAN address: tap the chip in the top-right and enter

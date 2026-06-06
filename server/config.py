@@ -35,4 +35,8 @@ MP3_BITRATE = int(os.getenv("FULLBAND_MP3_BITRATE", "256"))
 HOST = os.getenv("FULLBAND_HOST", "0.0.0.0")
 PORT = int(os.getenv("FULLBAND_PORT", "8000"))
 
+# Built web UI to serve at "/" (so the desktop app / browser get UI + API on one
+# origin). Points at web/dist; only mounted if that build exists.
+WEB_DIR = Path(os.getenv("FULLBAND_WEB", Path(__file__).parent.parent / "web" / "dist")).resolve()
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)

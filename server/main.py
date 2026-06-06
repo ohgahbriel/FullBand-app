@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import config
@@ -78,6 +79,13 @@ def get_file(job_id: str, filename: str):
     if not str(target).startswith(str(base)) or not target.exists():
         raise HTTPException(404, "no such file")
     return FileResponse(target)
+
+
+# Serve the built web UI at "/" so the desktop app and browser get UI + API on a
+# single origin. Mounted last, so the /api routes above always take precedence.
+# Skipped if the bundle hasn't been built yet (the API still works on its own).
+if config.WEB_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(config.WEB_DIR), html=True), name="ui")
 
 
 if __name__ == "__main__":
