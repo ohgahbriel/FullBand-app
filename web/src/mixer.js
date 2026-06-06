@@ -114,6 +114,32 @@ export class Mixer {
 
   _track(name) { return this.tracks.find((t) => t.name === name); }
 
+  // Approximate mix waveform: per-bin peak amplitude summed across stems,
+  // normalised to 0..1. Computed once after load for the waveform display.
+  getPeaks(bins) {
+    const peaks = new Float32Array(bins);
+    if (!this.tracks.length) return peaks;
+    const total = this.duration * (this.tracks[0]?.buffer.sampleRate || 44100);
+    const block = Math.max(1, Math.floor(total / bins));
+    for (const t of this.tracks) {
+      const data = t.buffer.getChannelData(0);
+      for (let i = 0; i < bins; i++) {
+        let max = 0;
+        const start = i * block;
+        const end = Math.min(start + block, data.length);
+        for (let j = start; j < end; j++) {
+          const v = Math.abs(data[j]);
+          if (v > max) max = v;
+        }
+        peaks[i] += max;
+      }
+    }
+    let m = 0;
+    for (const p of peaks) if (p > m) m = p;
+    if (m > 0) for (let i = 0; i < bins; i++) peaks[i] /= m;
+    return peaks;
+  }
+
   // Solo wins: if any track is soloed, only soloed (non-muted) tracks sound.
   _applyGains() {
     const anySolo = this.tracks.some((t) => t.solo);

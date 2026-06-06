@@ -62,7 +62,8 @@ def get_job(job_id: str):
         raise HTTPException(404, "no such job")
     return {
         "id": job.id, "status": job.status, "progress": round(job.progress, 3),
-        "title": job.title, "stems": job.stems, "error": job.error,
+        "title": job.title, "bpm": job.bpm, "key": job.key,
+        "stems": job.stems, "error": job.error,
     }
 
 

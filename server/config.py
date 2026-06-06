@@ -17,7 +17,7 @@ DATA_DIR = Path(os.getenv("FULLBAND_DATA", Path(__file__).parent / "data")).reso
 
 # Demucs model. "htdemucs" -> 4 stems (vocals/drums/bass/other).
 # "htdemucs_6s" -> 6 stems, adding guitar + piano (slower, slightly noisier).
-MODEL = os.getenv("FULLBAND_MODEL", "htdemucs")
+MODEL = os.getenv("FULLBAND_MODEL", "htdemucs_6s")
 
 # "cuda" to use the GPU, "cpu" to force CPU. Auto-detected at startup if unset.
 DEVICE = os.getenv("FULLBAND_DEVICE", "")

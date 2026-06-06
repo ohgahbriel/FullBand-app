@@ -1,38 +1,56 @@
-// UI glue: talk to the backend, drive the Mixer, render per-stem channels.
+// UI glue: talk to the backend, drive the Mixer, paint the waveform + strips.
 import { Mixer } from "./mixer.js";
 
-// The backend lives on the GPU PC. In a browser on that PC it's localhost; the
-// Android build must point at the PC's LAN address. Configurable + remembered.
 const DEFAULT_BACKEND =
   location.protocol.startsWith("http") ? location.origin : "http://localhost:8000";
 let BACKEND = localStorage.getItem("fullband.backend") || DEFAULT_BACKEND;
 
-const ICONS = { vocals: "🎤", drums: "🥁", bass: "🎸", other: "🎹", guitar: "🎸", piano: "🎹" };
+// Per-stem display: icon + fader cap colour. Falls back for unknown names.
+const STEMS = {
+  click:  { icon: "🔔", label: "Click",  cap: "#c9ced9" },
+  drums:  { icon: "🥁", label: "Drums",  cap: "#cdd3df" },
+  bass:   { icon: "🎸", label: "Bass",   cap: "#e0793f" },
+  guitar: { icon: "🎸", label: "Guitar", cap: "#d05c5c" },
+  piano:  { icon: "🎹", label: "Piano",  cap: "#9a7bd0" },
+  other:  { icon: "🎶", label: "Other",  cap: "#5fae8b" },
+  vocals: { icon: "🎤", label: "Vocals", cap: "#3aa0ff" },
+};
+const meta = (name) =>
+  STEMS[name] || { icon: "🎵", label: name[0].toUpperCase() + name.slice(1), cap: "#c9ced9" };
+
+const PEAK_BINS = 900;
+const ACCENT = "#f0a44a";
 
 const $ = (id) => document.getElementById(id);
 const mixer = new Mixer();
 let pollTimer = null;
 let rafId = null;
+let peaks = new Float32Array(PEAK_BINS);
+let seeking = false;
 
-// --- backend config (tap the device chip to change it) --------------------
+// --- backend config (tap either device chip to change it) -----------------
 async function refreshHealth() {
+  const chips = [$("device"), $("device2")].filter(Boolean);
   try {
     const h = await fetch(`${BACKEND}/api/health`).then((r) => r.json());
-    $("device").textContent = `${h.device} · ${h.model}`;
-    $("device").classList.toggle("gpu", h.device === "cuda");
+    chips.forEach((c) => {
+      c.textContent = `${h.device} · ${h.model}`;
+      c.classList.toggle("gpu", h.device === "cuda");
+    });
   } catch {
-    $("device").textContent = "backend offline";
-    $("device").classList.remove("gpu");
+    chips.forEach((c) => { c.textContent = "backend offline"; c.classList.remove("gpu"); });
   }
 }
-$("device").addEventListener("click", () => {
+function changeBackend() {
   const next = prompt("Backend URL (the GPU PC):", BACKEND);
   if (next) {
     BACKEND = next.replace(/\/+$/, "");
     localStorage.setItem("fullband.backend", BACKEND);
     refreshHealth();
   }
-});
+}
+$("device").addEventListener("click", changeBackend);
+$("device2").addEventListener("click", changeBackend);
 
 // --- job submission + polling --------------------------------------------
 $("urlForm").addEventListener("submit", async (e) => {
@@ -82,44 +100,55 @@ function pollJob(id) {
 async function loadStems(job) {
   setStatus("Loading stems into the mixer…");
   const stems = job.stems.map((s) => ({ name: s.name, url: BACKEND + s.url }));
-  await mixer.load(stems, (done, total) =>
-    setStatus(`Loading stems… ${done}/${total}`));
-  buildTracks();
+  await mixer.load(stems, (done, total) => setStatus(`Loading stems… ${done}/${total}`));
+  peaks = mixer.getPeaks(PEAK_BINS);
+
+  buildStrips();
   $("nowPlaying").textContent = job.title || "Untitled";
-  $("dur").textContent = fmt(mixer.duration);
+  $("key").textContent = job.key || "—";
+  $("bpm").textContent = job.bpm ? Math.round(job.bpm) : "—";
+  $("remain").textContent = "-" + fmt(mixer.duration);
+  $("elapsed").textContent = "0:00";
+
+  $("setup").hidden = true;
   $("player").hidden = false;
   hideProgress();
   setStatus("");
   setBusy(false);
+  requestAnimationFrame(() => drawWave(0)); // after layout so canvas has size
 }
 
-// --- mixer UI -------------------------------------------------------------
-function buildTracks() {
+// --- mixer strips ---------------------------------------------------------
+function buildStrips() {
   const wrap = $("tracks");
   wrap.innerHTML = "";
   for (const t of mixer.tracks) {
+    const m = meta(t.name);
     const el = document.createElement("div");
-    el.className = "track";
+    el.className = "strip";
+    el.style.setProperty("--cap", m.cap);
     el.innerHTML = `
-      <div class="track-head">
-        <span class="track-icon">${ICONS[t.name] || "🎵"}</span>
-        <span class="track-name">${t.name}</span>
+      <div class="fader">
+        <input class="vol" type="range" min="0" max="1" step="0.01" value="1" />
       </div>
-      <input class="vol" type="range" min="0" max="1" step="0.01" value="1" />
-      <div class="track-btns">
-        <button class="mute">M</button>
-        <button class="solo">S</button>
-      </div>`;
+      <button class="mute">M</button>
+      <button class="solo">S</button>
+      <div class="strip-icon">${m.icon}</div>
+      <div class="strip-label">${m.label}</div>`;
     el.querySelector(".vol").addEventListener("input", (e) =>
       mixer.setVolume(t.name, parseFloat(e.target.value)));
     el.querySelector(".mute").addEventListener("click", (e) =>
       e.target.classList.toggle("on", mixer.toggleMute(t.name)));
-    el.querySelector(".solo").addEventListener("click", (e) =>
-      e.target.classList.toggle("on", mixer.toggleSolo(t.name)));
+    el.querySelector(".solo").addEventListener("click", (e) => {
+      const on = mixer.toggleSolo(t.name);
+      e.target.classList.toggle("on", on);
+      el.classList.toggle("solo-on", on);
+    });
     wrap.appendChild(el);
   }
 }
 
+// --- transport ------------------------------------------------------------
 $("playPause").addEventListener("click", async () => {
   if (mixer.playing) {
     mixer.pause();
@@ -131,29 +160,79 @@ $("playPause").addEventListener("click", async () => {
     tick();
   }
 });
-
-mixer.onended = () => {
-  $("playPause").textContent = "▶";
+$("restart").addEventListener("click", () => {
+  mixer.seek(0);
+  if (!mixer.playing) { updateClock(); drawWave(0); }
+});
+$("back").addEventListener("click", () => {
+  mixer.pause();
   cancelAnimationFrame(rafId);
-  $("seek").value = 0;
-  $("time").textContent = "0:00";
-};
-
-let seeking = false;
-$("seek").addEventListener("input", () => { seeking = true; });
-$("seek").addEventListener("change", (e) => {
-  mixer.seek((e.target.value / 1000) * mixer.duration);
-  seeking = false;
+  $("playPause").textContent = "▶";
+  $("player").hidden = true;
+  $("setup").hidden = false;
 });
 $("master").addEventListener("input", (e) =>
   mixer.setMasterVolume(parseFloat(e.target.value)));
 
+mixer.onended = () => {
+  $("playPause").textContent = "▶";
+  cancelAnimationFrame(rafId);
+  updateClock();
+  drawWave(0);
+};
+
+// click the waveform to seek
+$("wave").addEventListener("click", (e) => {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+  mixer.seek(ratio * mixer.duration);
+  updateClock();
+  drawWave(ratio);
+});
+
 function tick() {
-  const t = mixer.currentTime();
-  $("time").textContent = fmt(t);
-  if (!seeking) $("seek").value = (t / mixer.duration) * 1000 || 0;
+  updateClock();
+  drawWave(mixer.duration ? mixer.currentTime() / mixer.duration : 0);
   if (mixer.playing) rafId = requestAnimationFrame(tick);
 }
+
+function updateClock() {
+  const t = mixer.currentTime();
+  $("elapsed").textContent = fmt(t);
+  $("remain").textContent = "-" + fmt(Math.max(0, mixer.duration - t));
+}
+
+// --- waveform painting ----------------------------------------------------
+function drawWave(ratio) {
+  const c = $("wave");
+  const dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  if (!w || !h) return;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) {
+    c.width = Math.round(w * dpr);
+    c.height = Math.round(h * dpr);
+  }
+  const ctx = c.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const mid = h / 2;
+  const n = peaks.length;
+  const bw = w / n;
+  const playX = ratio * w;
+  for (let i = 0; i < n; i++) {
+    const x = i * bw;
+    const amp = peaks[i] * (h * 0.46);
+    ctx.fillStyle = x <= playX ? "#7d93d4" : "#39425e";
+    ctx.fillRect(x, mid - amp, Math.max(1, bw * 0.72), amp * 2 || 1);
+  }
+  ctx.fillStyle = ACCENT;
+  ctx.fillRect(playX - 1, 0, 2, h);
+}
+
+window.addEventListener("resize", () => {
+  if (!$("player").hidden) drawWave(mixer.duration ? mixer.currentTime() / mixer.duration : 0);
+});
 
 // --- helpers --------------------------------------------------------------
 function setStatus(msg, isError = false) {

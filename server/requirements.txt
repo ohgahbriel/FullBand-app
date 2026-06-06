@@ -12,3 +12,7 @@ uvicorn[standard]==0.34.0
 yt-dlp>=2024.12.13
 demucs==4.0.1
 python-multipart==0.0.20
+
+# BPM + musical-key detection and click-track synthesis.
+librosa>=0.10.2
+soundfile>=0.12.1
