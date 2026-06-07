@@ -45,9 +45,13 @@ function startBackend() {
     return null;
   }
   const proc = spawn(PYTHON, ["main.py"], { cwd: SERVER_DIR });
-  proc.stdout.on("data", (d) => process.stdout.write(`[backend] ${d}`));
-  proc.stderr.on("data", (d) => process.stderr.write(`[backend] ${d}`));
-  proc.on("exit", (code) => console.log(`[backend] exited with ${code}`));
+  // Backend output goes to a log file, not the console — so the silent launcher
+  // (FullBand.vbs) shows no green log window. Tail desktop/backend.log to debug.
+  const log = fs.createWriteStream(path.join(__dirname, "backend.log"), { flags: "a" });
+  log.write(`\n--- backend started ${new Date().toISOString()} ---\n`);
+  proc.stdout.on("data", (d) => log.write(d));
+  proc.stderr.on("data", (d) => log.write(d));
+  proc.on("exit", (code) => log.write(`--- backend exited with ${code} ---\n`));
   return proc;
 }
 
