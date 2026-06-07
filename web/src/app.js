@@ -7,15 +7,15 @@ let BACKEND = localStorage.getItem("fullband.backend") || DEFAULT_BACKEND;
 
 // Per-stem display: icon + fader cap colour. Falls back for unknown names.
 const STEMS = {
-  click:          { icon: "🔔", label: "Click",      cap: "#c9ced9" },
-  drums:          { icon: "🥁", label: "Drums",      cap: "#cdd3df" },
-  bass:           { icon: "🎸", label: "Bass",       cap: "#e0793f" },
-  guitar:         { icon: "🎸", label: "Guitar",     cap: "#d05c5c" },
-  guitar_lead:    { icon: "🎸", label: "Gtr Lead",   cap: "#e8794f" },
-  guitar_rhythm:  { icon: "🎸", label: "Gtr Rhythm", cap: "#c25b6b" },
-  piano:          { icon: "🎹", label: "Piano",      cap: "#9a7bd0" },
-  other:          { icon: "🎶", label: "Other",      cap: "#5fae8b" },
-  vocals:         { icon: "🎤", label: "Vocals",     cap: "#3aa0ff" },
+  click:          { icon: "🔔", label: "Click",      cap: "#ffcc00" },
+  drums:          { icon: "🥁", label: "Drums",      cap: "#39ff14" },
+  bass:           { icon: "🎸", label: "Bass",       cap: "#ff6b00" },
+  guitar:         { icon: "🎸", label: "Guitar",     cap: "#ff2d78" },
+  guitar_lead:    { icon: "🎸", label: "Gtr Lead",   cap: "#ff2d78" },
+  guitar_rhythm:  { icon: "🎸", label: "Gtr Rhythm", cap: "#bf5fff" },
+  piano:          { icon: "🎹", label: "Piano",      cap: "#00f5ff" },
+  other:          { icon: "🎶", label: "Other",      cap: "#7a9bff" },
+  vocals:         { icon: "🎤", label: "Vocals",     cap: "#00f5ff" },
 };
 const meta = (name) =>
   STEMS[name] || { icon: "🎵", label: name[0].toUpperCase() + name.slice(1), cap: "#c9ced9" };
@@ -33,6 +33,8 @@ let currentJob = null;   // {id, title, beats, ...}
 let beats = [];          // beat times (s) in the CURRENT timeline (tempo-scaled)
 let lastBeat = -1;       // last beat index pulsed
 let meterEls = {};       // track name -> meter fill element
+let chords = [];         // [{time, label}] original timeline
+let lyrics = [];         // [{time, text}] original timeline
 
 // transpose + tempo
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -120,12 +122,15 @@ async function loadStems(job) {
   origBeats = job.beats || [];
   origBpm = job.bpm || 0;
   origKey = job.key || "";
+  chords = job.chords || [];
+  lyrics = job.lyrics || [];
   semitones = 0; tempoMult = 1.0; appliedTempo = 1.0;
   beats = origBeats;
   lastBeat = -1;
 
   buildStrips();
   $("nowPlaying").textContent = job.title || "Untitled";
+  setupViz(job);
   updateShiftDisplays();
   $("remain").textContent = "-" + fmt(mixer.duration);
   $("elapsed").textContent = "0:00";
@@ -341,6 +346,7 @@ $("wave").addEventListener("click", (e) => {
   lastBeat = beatIndexAt(mixer.currentTime());
   updateClock();
   drawWave(ratio);
+  updateViz(mixer.currentTime());
 });
 
 function tick() {
@@ -349,7 +355,56 @@ function tick() {
   drawWave(mixer.duration ? t / mixer.duration : 0);
   updateMetronome(t);
   updateMeters();
+  updateViz(t);
   if (mixer.playing) rafId = requestAnimationFrame(tick);
+}
+
+// --- lyrics + chords visualizer ------------------------------------------
+function setupViz(job) {
+  const badge = $("vizBadge");
+  if (job.lyrics_source) {
+    badge.textContent = job.lyrics_source === "whisper" ? "WHISPER" : "CAPTIONS";
+    badge.hidden = false;
+  } else {
+    badge.hidden = true;
+  }
+  $("chordNow").textContent = chords.length ? "—" : "—";
+  $("lyricNow").textContent = lyrics.length ? "" : "(no lyrics found)";
+  ["chordPrev", "chordNext1", "chordNext2", "lyricPrev", "lyricNext"].forEach((id) => ($(id).textContent = ""));
+  updateViz(mixer.currentTime());
+}
+
+function lastIdx(arr, t) {        // last index with time <= t, else -1
+  let i = -1;
+  for (let k = 0; k < arr.length; k++) { if (arr[k].time <= t) i = k; else break; }
+  return i;
+}
+
+function shiftChord(label, semis) {
+  if (!label || label === "N" || !semis) return label === "N" ? "—" : label;
+  const m = label.match(/^([A-G]#?)(.*)$/);
+  if (!m) return label;
+  const i = NOTE_NAMES.indexOf(m[1]);
+  if (i < 0) return label;
+  return NOTE_NAMES[((i + semis) % 12 + 12) % 12] + m[2];
+}
+const chordText = (c) => (c ? shiftChord(c.label, semitones) : "");
+
+function updateViz(t) {
+  const tOrig = t * appliedTempo;   // chords/lyrics are in the original timeline
+  if (chords.length) {
+    const ci = lastIdx(chords, tOrig);
+    $("chordPrev").textContent = ci > 0 ? chordText(chords[ci - 1]) : "";
+    $("chordNow").textContent = ci >= 0 ? chordText(chords[ci]) : chordText(chords[0]);
+    $("chordNext1").textContent = chordText(chords[ci + 1]);
+    $("chordNext2").textContent = chordText(chords[ci + 2]);
+  }
+  if (lyrics.length) {
+    const li = lastIdx(lyrics, tOrig);
+    $("lyricPrev").textContent = li > 0 ? lyrics[li - 1].text : "";
+    $("lyricNow").textContent = li >= 0 ? lyrics[li].text : (lyrics[0] ? "♪ " + lyrics[0].text : "");
+    $("lyricNext").textContent = lyrics[li + 1] ? lyrics[li + 1].text : "";
+  }
 }
 
 function updateMeters() {

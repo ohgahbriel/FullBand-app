@@ -68,6 +68,7 @@ def get_job(job_id: str):
     return {
         "id": job.id, "status": job.status, "progress": round(job.progress, 3),
         "title": job.title, "bpm": job.bpm, "key": job.key, "beats": job.beats,
+        "chords": job.chords, "lyrics": job.lyrics, "lyrics_source": job.lyrics_source,
         "stems": job.stems, "error": job.error,
     }
 

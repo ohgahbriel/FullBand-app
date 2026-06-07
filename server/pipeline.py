@@ -25,6 +25,9 @@ class Job:
     bpm: float = 0.0                # detected tempo, 0 if analysis failed
     key: str = ""                   # detected key, e.g. "C maj", "" if unknown
     beats: list[float] = field(default_factory=list)  # beat times, seconds
+    chords: list[dict] = field(default_factory=list)  # [{time, label}] per beat
+    lyrics: list[dict] = field(default_factory=list)  # [{time, text}] synced lines
+    lyrics_source: str = ""         # "captions" | "whisper" | ""
     stems: list[dict] = field(default_factory=list)  # [{name, url}]
     error: str = ""
 
@@ -190,6 +193,45 @@ def _estimate_key(y, sr) -> str:
     return best_key
 
 
+def _estimate_chords(y, sr, beat_times) -> list[dict]:
+    """Standard (major/minor) chord per beat via chroma + triad templates.
+
+    Simplified on purpose: 24 templates (12 maj + 12 min). Consecutive identical
+    chords are collapsed so the result reads like a chord chart.
+    """
+    import numpy as np
+    import librosa
+
+    bt = [float(t) for t in beat_times]
+    if not bt:
+        return []
+    chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+    times = librosa.times_like(chroma, sr=sr)
+
+    templates, labels = [], []
+    for r in range(12):
+        for ivs, suffix in (([0, 4, 7], ""), ([0, 3, 7], "m")):
+            t = np.zeros(12)
+            for iv in ivs:
+                t[(r + iv) % 12] = 1.0
+            templates.append(t / np.linalg.norm(t))
+            labels.append(_PITCHES[r] + suffix)
+    T = np.array(templates)
+
+    edges = bt + [float(times[-1]) if len(times) else bt[-1] + 1.0]
+    out = []
+    for i in range(len(bt)):
+        mask = (times >= edges[i]) & (times < edges[i + 1])
+        seg = chroma[:, mask].mean(axis=1) if mask.any() else chroma[:, np.argmin(np.abs(times - edges[i]))]
+        if seg.sum() <= 1e-6:
+            label = "N"
+        else:
+            label = labels[int(np.argmax(T @ (seg / (np.linalg.norm(seg) + 1e-9))))]
+        if not out or out[-1]["label"] != label:
+            out.append({"time": round(float(bt[i]), 3), "label": label})
+    return out
+
+
 def analyze(job: Job, source: Path) -> None:
     """Detect BPM + key and render a beat-aligned click track.
 
@@ -210,6 +252,7 @@ def analyze(job: Job, source: Path) -> None:
         beat_times = librosa.frames_to_time(beats, sr=sr)
         job.beats = [round(float(t), 3) for t in beat_times]
         job.key = _estimate_key(y, sr)
+        job.chords = _estimate_chords(y, sr, beat_times)
 
         # Full-length click track at a clean 44.1 kHz, encoded like the stems.
         out_sr = 44100
@@ -234,6 +277,77 @@ def analyze(job: Job, source: Path) -> None:
         print(f"[analyze] skipped: {exc}", file=sys.stderr)
 
 
+_TS_RE = re.compile(r"(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->")
+
+
+def _parse_vtt(path: Path) -> list[dict]:
+    """Parse a WebVTT/SRT caption file into [{time, text}] lines, de-duped."""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    lines, last = [], None
+    for block in re.split(r"\n\s*\n", text):
+        m = _TS_RE.search(block)
+        if not m:
+            continue
+        h, mn, s, ms = map(int, m.groups())
+        t = h * 3600 + mn * 60 + s + ms / 1000.0
+        body = []
+        seen_ts = False
+        for ln in block.splitlines():
+            if "-->" in ln:
+                seen_ts = True
+                continue
+            if seen_ts and ln.strip():
+                body.append(ln)
+        raw = re.sub(r"<[^>]+>", "", " ".join(body))      # strip <c>/timing tags
+        raw = re.sub(r"\s+", " ", raw).strip()
+        if not raw or raw == last:                          # drop rolling dupes
+            continue
+        last = raw
+        lines.append({"time": round(t, 3), "text": raw})
+    return lines
+
+
+def _download_captions(job: Job) -> None:
+    """Best-effort: pull a single English caption track (separate from the audio
+    download so a caption hiccup never fails the job)."""
+    cmd = [
+        sys.executable, "-m", "yt_dlp", "--skip-download", "--no-playlist",
+        "--write-subs", "--write-auto-subs",
+        "--sub-langs", "en", "--sub-format", "vtt", "--convert-subs", "vtt",
+        "-o", str(job.dir() / "source.%(ext)s"), job.url,
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except Exception:
+        pass
+
+
+def fetch_lyrics(job: Job, source: Path) -> None:
+    """Synced lyrics: prefer the video's captions, fall back to Whisper."""
+    try:
+        _download_captions(job)
+        for vtt in sorted(job.dir().glob("source*.vtt")):
+            parsed = _parse_vtt(vtt)
+            if parsed:
+                job.lyrics, job.lyrics_source = parsed, "captions"
+                return
+        vocals = job.dir() / "stems" / job.model / source.stem / f"vocals.{config.OUTPUT_FORMAT}"
+        if not vocals.exists():
+            return
+        import whisper
+        device = _resolve_device()
+        model = whisper.load_model(config.WHISPER_MODEL, device=device)
+        result = model.transcribe(str(vocals), fp16=(device == "cuda"))
+        job.lyrics = [
+            {"time": round(float(s["start"]), 3), "text": s["text"].strip()}
+            for s in result.get("segments", []) if s.get("text", "").strip()
+        ]
+        if job.lyrics:
+            job.lyrics_source = "whisper"
+    except Exception as exc:  # lyrics are optional
+        print(f"[lyrics] skipped: {exc}", file=sys.stderr)
+
+
 def run(job: Job) -> None:
     """Full pipeline, with phase-based error capture."""
     try:
@@ -241,6 +355,7 @@ def run(job: Job) -> None:
         source = download_audio(job)
         separate(job, source)
         analyze(job, source)
+        fetch_lyrics(job, source)
         job.status = "done"
         job.progress = 1.0
     except Exception as exc:  # surface the message to the client

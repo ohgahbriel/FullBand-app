@@ -1,28 +1,42 @@
-/* FullBand — Jamzone-style dark mixer UI. */
+/* FullBand — retro/synthwave UI, inspired by SMOTU (Shred Masters). */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Orbitron:wght@500;700;900&display=swap');
 
 :root {
-  --bg: #0a0d16;
-  --bg-2: #0e1220;
-  --panel: #141a28;
-  --panel-2: #1a2132;
-  --line: #232b3d;
-  --text: #e8ecf6;
-  --muted: #8b93a7;
-  --accent: #f0a44a;        /* playhead / master orange */
-  --accent-blue: #3aa0ff;
-  --danger: #e8443b;
-  --wave: #5a6680;
+  --bg: #0a0a0f;
+  --bg-2: #12121e;
+  --panel: #12121e;
+  --panel-2: #1a1a2e;
+  --line: #2a2a4a;
+  --text: #e8e8f0;
+  --muted: #5a5a7a;
+  --accent: #ff6b00;        /* orange */
+  --gold: #ffcc00;
+  --green: #39ff14;
+  --cyan: #00f5ff;
+  --pink: #ff2d78;
+  --purple: #bf5fff;
+  --accent-blue: #00f5ff;   /* legacy alias -> cyan */
+  --danger: #ff2d78;
+  --pixel: 'Press Start 2P', monospace;
+  --term: 'VT323', monospace;
 }
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
   margin: 0;
-  background: radial-gradient(1200px 600px at 50% -10%, #131a2b 0%, var(--bg) 60%);
+  background:
+    radial-gradient(1100px 540px at 50% -8%, #1a1430 0%, var(--bg) 62%),
+    var(--bg);
   color: var(--text);
-  font: 15px/1.4 -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  font: 18px/1.35 var(--term);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
+}
+/* CRT scanline overlay */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.10) 2px, rgba(0,0,0,.10) 4px);
 }
 button { font: inherit; color: inherit; cursor: pointer; }
 
@@ -260,3 +274,91 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .infobar, .player-top { backdrop-filter: blur(6px); }
 .chip { box-shadow: inset 0 1px 0 rgba(255,255,255,.03); }
+
+/* ===== SMOTU retro/synthwave overrides ===== */
+.logo {
+  font-family: var(--pixel); font-size: 30px; color: var(--gold); letter-spacing: 1px;
+  text-shadow: 0 0 18px var(--accent), 4px 4px 0 rgba(255,107,0,.35);
+  animation: glow 2.4s ease-in-out infinite;
+}
+.logo span { color: var(--accent); }
+@keyframes glow {
+  0%,100% { text-shadow: 0 0 18px var(--accent), 4px 4px 0 rgba(255,107,0,.35); }
+  50%     { text-shadow: 0 0 28px var(--gold), 0 0 54px rgba(255,204,0,.5), 4px 4px 0 rgba(255,107,0,.35); }
+}
+.tagline { color: var(--cyan); letter-spacing: 1px; font-size: 19px; }
+
+.url-row input, .fmt { border-radius: 3px; font-family: var(--term); }
+.url-row input:focus { border-color: var(--cyan); box-shadow: 0 0 12px rgba(0,245,255,.25); }
+.url-row button, .exp {
+  font-family: var(--pixel); font-size: 10px; letter-spacing: 1px; border-radius: 3px;
+  background: var(--accent); color: #000; border: none; box-shadow: 4px 4px 0 rgba(255,107,0,.3);
+}
+.url-row button:hover, .exp:hover {
+  background: var(--gold); transform: translate(-1px,-1px); box-shadow: 5px 5px 0 rgba(255,107,0,.4);
+}
+.url-row button:active, .exp:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 rgba(255,107,0,.3); }
+
+.device { font-family: var(--pixel); font-size: 8px; border-radius: 3px; }
+.device.gpu { color: var(--green); border-color: rgba(57,255,20,.5); box-shadow: 0 0 10px rgba(57,255,20,.2); }
+
+.t-title { font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 1px; }
+.t-elapsed, .t-remain { font-family: var(--pixel); font-size: 11px; }
+
+.chip { border-radius: 3px; }
+.chip-k { font-family: var(--pixel); font-size: 7px; letter-spacing: 1px; }
+.step { font-family: var(--term); border-radius: 3px; font-size: 17px; }
+.step-val { font-family: var(--pixel); font-size: 11px; }
+.step-val.shifted { color: var(--gold); text-shadow: 0 0 8px rgba(255,204,0,.5); }
+
+.stage, .player-top, .infobar, .mixer { border-radius: 0; }
+.fader { border-radius: 4px; }
+.strip-label { font-family: var(--term); font-size: 14px; }
+.strip.solo-on .strip-label { color: var(--cyan); }
+.mute { font-family: var(--pixel); font-size: 9px; border-radius: 3px; }
+.mute.on { background: var(--pink); border-color: var(--pink); box-shadow: 0 0 12px rgba(255,45,120,.45); }
+.solo { font-family: var(--pixel); font-size: 7px; border-radius: 3px; }
+.solo.on { color: var(--cyan); border-color: var(--cyan); }
+
+.play-btn {
+  background: radial-gradient(circle at 50% 32%, #1a1430, #12121e);
+  box-shadow: 0 0 0 3px rgba(255,107,0,.28), 0 0 30px rgba(255,107,0,.22);
+}
+.play-btn:hover { box-shadow: 0 0 0 4px rgba(255,204,0,.45), 0 0 40px rgba(255,204,0,.3); color: var(--gold); }
+.t-btn:hover, .back:hover { border-color: var(--cyan); color: var(--cyan); }
+.beat-dot.hit { background: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
+.beat-dot.hit.down { background: var(--gold); box-shadow: 0 0 16px var(--gold); }
+
+/* ===== lyrics + chords visualizer ===== */
+.viz {
+  position: relative;
+  display: grid; grid-template-rows: auto 1fr; gap: 10px;
+  padding: 16px 18px; background: linear-gradient(180deg, #14122a, #0c0a16);
+  border-bottom: 1px solid var(--line); min-height: 188px;
+}
+.viz-chords {
+  display: flex; align-items: center; justify-content: center; gap: 16px; height: 58px;
+}
+.viz-chord {
+  font-family: var(--pixel); color: var(--muted); transition: all .12s;
+  opacity: .5; font-size: 13px;
+}
+.viz-chord.now {
+  color: var(--gold); opacity: 1; font-size: 26px;
+  text-shadow: 0 0 16px rgba(255,204,0,.6), 0 0 36px rgba(255,107,0,.35);
+}
+.viz-chord.next1 { color: var(--cyan); opacity: .85; font-size: 16px; }
+.viz-lyrics {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 7px; text-align: center; overflow: hidden;
+}
+.viz-line { font-family: var(--term); font-size: 21px; color: var(--muted); opacity: .55; transition: all .15s; }
+.viz-line.now {
+  font-size: 30px; color: #fff; opacity: 1; letter-spacing: .5px;
+  text-shadow: 0 0 18px rgba(0,245,255,.45);
+}
+.viz-empty { color: var(--muted); font-family: var(--term); font-size: 18px; text-align: center; align-self: center; }
+.viz-badge {
+  position: absolute; right: 16px; top: 12px; font-family: var(--pixel); font-size: 7px;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 4px 7px;
+}

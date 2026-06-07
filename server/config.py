@@ -41,6 +41,10 @@ SHIFT_ENGINE = os.getenv("FULLBAND_SHIFT", "rubberband")
 # separation; the two sum back to the original guitar). Set 0 to disable.
 GUITAR_SPLIT = os.getenv("FULLBAND_GUITAR_SPLIT", "1") not in ("0", "false", "")
 
+# Whisper model for the lyrics fallback (used when the video has no captions).
+# "base" is a good speed/quality balance; "small"/"medium" are better but slower.
+WHISPER_MODEL = os.getenv("FULLBAND_WHISPER", "base")
+
 # Network bind. 0.0.0.0 so a phone on the same Wi-Fi can reach it.
 HOST = os.getenv("FULLBAND_HOST", "0.0.0.0")
 PORT = int(os.getenv("FULLBAND_PORT", "8000"))

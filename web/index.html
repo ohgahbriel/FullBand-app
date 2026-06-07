@@ -32,6 +32,21 @@
         <button id="back" class="back" title="New song">✕</button>
       </header>
 
+      <div class="viz" id="viz">
+        <span id="vizBadge" class="viz-badge" hidden></span>
+        <div class="viz-chords">
+          <span class="viz-chord" id="chordPrev"></span>
+          <span class="viz-chord now" id="chordNow">—</span>
+          <span class="viz-chord next1" id="chordNext1"></span>
+          <span class="viz-chord" id="chordNext2"></span>
+        </div>
+        <div class="viz-lyrics">
+          <span class="viz-line" id="lyricPrev"></span>
+          <span class="viz-line now" id="lyricNow"></span>
+          <span class="viz-line" id="lyricNext"></span>
+        </div>
+      </div>
+
       <div class="stage">
         <canvas id="wave" class="wave"></canvas>
         <div class="transport">
