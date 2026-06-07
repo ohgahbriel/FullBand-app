@@ -13,6 +13,9 @@ yt-dlp>=2024.12.13
 demucs==4.0.1
 python-multipart==0.0.20
 
-# BPM + musical-key detection and click-track synthesis.
+# BPM + musical-key detection, chord detection, click-track synthesis.
 librosa>=0.10.2
 soundfile>=0.12.1
+
+# Lyrics transcription fallback when a video has no captions (uses torch + GPU).
+openai-whisper>=20240930
