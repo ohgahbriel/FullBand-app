@@ -203,12 +203,14 @@ $("master").addEventListener("input", (e) =>
 $("saveMix").addEventListener("click", async () => {
   if (!currentJob) return;
   const fmt = $("fmt").value;
+  const clickSplit = $("clickSplit").value;
   const { gains, master } = mixer.effectiveGains();
-  await runExport(`Rendering ${fmt.toUpperCase()} mix…`, `(mix).${fmt}`, () =>
+  const tag = { left: "(click-L)", right: "(click-R)" }[clickSplit] || "(mix)";
+  await runExport(`Rendering ${fmt.toUpperCase()} mix…`, `${tag}.${fmt}`, () =>
     fetch(`${BACKEND}/api/jobs/${currentJob.id}/mix`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ format: fmt, gains, master, semitones, tempo: tempoMult }),
+      body: JSON.stringify({ format: fmt, gains, master, semitones, tempo: tempoMult, click_split: clickSplit }),
     }));
 });
 

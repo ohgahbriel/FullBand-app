@@ -112,9 +112,13 @@ depending on length.
   preserved. Double-click the KEY or BPM value to reset that axis. First render
   of a new setting takes a few seconds on a full song; cached settings are
   instant. (`FULLBAND_SHIFT=fast` uses a quicker, lower-quality engine.)
-- **Save mix** — renders the *current* mix (your fader/mute/solo levels) to
-  **MP3 / WAV / FLAC / OGG / M4A** via ffmpeg and downloads it. Default levels
-  reproduce the original (stems sum with `amix … normalize=0`).
+- **Save mix** — renders the *current* mix (your fader/mute/solo levels, plus any
+  transpose/tempo) to **MP3 / WAV / FLAC / OGG / M4A** via ffmpeg and downloads
+  it. Default levels reproduce the original (stems sum with `amix … normalize=0`).
+  - **Click split** dropdown — *Stereo mix* (normal), or **Click L · mix R** /
+    **Click R · mix L**: a practice track with the metronome hard-panned to one
+    ear and the full mix (mono) in the other. The click is included even if its
+    channel is muted in the mixer.
 - **Stems .zip** — downloads every separated stem in one zip.
 
 > Source separation gives a **fixed** stem set (vocals / drums / bass / guitar /

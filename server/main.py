@@ -101,6 +101,8 @@ class MixRequest(BaseModel):
     master: float = 1.0
     semitones: int = 0              # capture the current transpose…
     tempo: float = 1.0              # …and tempo in the saved mix
+    click_split: str = "off"        # "off" | "left" | "right": click hard to one
+                                    # channel, full mix to the other (practice track)
 
 
 def _stem_dir(job: Job) -> Path:
@@ -127,40 +129,81 @@ def render_mix(job_id: str, body: MixRequest):
         raise HTTPException(400, f"unsupported format: {fmt}")
 
     stem_dir = _stem_dir(job)
-    inputs = []
-    for name, gain in body.gains.items():
-        if gain <= 0:
-            continue
-        path = stem_dir / f"{name}.{config.OUTPUT_FORMAT}"
-        if path.exists():
-            inputs.append((path, gain))
-    if not inputs:
-        raise HTTPException(400, "nothing audible to mix")
-
-    cmd = ["ffmpeg", "-y"]
-    for path, _ in inputs:
-        cmd += ["-i", str(path)]
+    ext = config.OUTPUT_FORMAT
     sem = max(-12, min(12, int(body.semitones)))
     tempo = max(0.5, min(2.0, float(body.tempo)))
     shift = "" if (sem == 0 and abs(tempo - 1.0) < 1e-3) else _shift_filter(sem, tempo) + ","
-    parts = [f"[{i}:a]{shift}volume={g:.4f}[a{i}]" for i, (_, g) in enumerate(inputs)]
-    if len(inputs) > 1:
-        labels = "".join(f"[a{i}]" for i in range(len(inputs)))
-        parts.append(f"{labels}amix=inputs={len(inputs)}:normalize=0[mx]")
-        last = "[mx]"
-    else:
-        last = "[a0]"
-    parts.append(f"{last}volume={max(body.master, 0.0):.4f}[out]")
-
+    master = max(body.master, 0.0)
+    split = body.click_split.lower()
     media_type, codec = _MIX_FORMATS[fmt]
     out = job.dir() / f"mix.{fmt}"
+    cmd = ["ffmpeg", "-y"]
+
+    if split in ("left", "right"):
+        # Practice track: click hard to one channel, the rest of the mix (mono)
+        # to the other. The click is included regardless of its mute state.
+        click_path = stem_dir / f"click.{ext}"
+        if not click_path.exists():
+            raise HTTPException(400, "no click track to split")
+        music = []
+        for name, gain in body.gains.items():
+            if name == "click" or gain <= 0:
+                continue
+            p = stem_dir / f"{name}.{ext}"
+            if p.exists():
+                music.append((p, gain))
+        if not music:
+            raise HTTPException(400, "nothing audible to mix")
+        click_gain = body.gains.get("click", 0.0) or 1.0   # default audible if muted
+
+        for p, _ in music:
+            cmd += ["-i", str(p)]
+        cmd += ["-i", str(click_path)]
+        ci = len(music)
+
+        parts = [f"[{i}:a]{shift}volume={g:.4f}[m{i}]" for i, (_, g) in enumerate(music)]
+        if len(music) > 1:
+            labels = "".join(f"[m{i}]" for i in range(len(music)))
+            parts.append(f"{labels}amix=inputs={len(music)}:normalize=0[mxs]")
+            mlab = "[mxs]"
+        else:
+            mlab = "[m0]"
+        parts.append(f"{mlab}pan=mono|c0=0.5*c0+0.5*c1[musM]")     # mix -> mono
+        parts.append(f"[{ci}:a]{shift}volume={click_gain:.4f}[clk]")
+        parts.append("[clk]pan=mono|c0=c0[clkM]")                  # click -> mono
+        order = "[clkM][musM]" if split == "left" else "[musM][clkM]"
+        parts.append(f"{order}join=inputs=2:channel_layout=stereo:map=0.0-FL|1.0-FR[jn]")
+        parts.append(f"[jn]volume={master:.4f}[out]")
+        suffix = " (click-L)" if split == "left" else " (click-R)"
+    else:
+        inputs = []
+        for name, gain in body.gains.items():
+            if gain <= 0:
+                continue
+            p = stem_dir / f"{name}.{ext}"
+            if p.exists():
+                inputs.append((p, gain))
+        if not inputs:
+            raise HTTPException(400, "nothing audible to mix")
+        for p, _ in inputs:
+            cmd += ["-i", str(p)]
+        parts = [f"[{i}:a]{shift}volume={g:.4f}[a{i}]" for i, (_, g) in enumerate(inputs)]
+        if len(inputs) > 1:
+            labels = "".join(f"[a{i}]" for i in range(len(inputs)))
+            parts.append(f"{labels}amix=inputs={len(inputs)}:normalize=0[mx]")
+            last = "[mx]"
+        else:
+            last = "[a0]"
+        parts.append(f"{last}volume={master:.4f}[out]")
+        suffix = " (mix)"
+
     cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", *codec, str(out)]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0 or not out.exists():
         raise HTTPException(500, f"mix render failed: {proc.stderr[-400:]}")
 
     name = _safe(job.title) or job.id
-    return FileResponse(out, media_type=media_type, filename=f"{name} (mix).{fmt}")
+    return FileResponse(out, media_type=media_type, filename=f"{name}{suffix}.{fmt}")
 
 
 @app.get("/api/jobs/{job_id}/zip")
