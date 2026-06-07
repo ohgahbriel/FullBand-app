@@ -36,6 +36,11 @@ MP3_BITRATE = int(os.getenv("FULLBAND_MP3_BITRATE", "256"))
 # quality, much faster). Stems are 44.1 kHz.
 SHIFT_ENGINE = os.getenv("FULLBAND_SHIFT", "rubberband")
 
+# Experimental: split the single Demucs "guitar" stem into approximate
+# lead/rhythm channels via an HPSS + frequency heuristic (NOT true source
+# separation; the two sum back to the original guitar). Set 0 to disable.
+GUITAR_SPLIT = os.getenv("FULLBAND_GUITAR_SPLIT", "1") not in ("0", "false", "")
+
 # Network bind. 0.0.0.0 so a phone on the same Wi-Fi can reach it.
 HOST = os.getenv("FULLBAND_HOST", "0.0.0.0")
 PORT = int(os.getenv("FULLBAND_PORT", "8000"))

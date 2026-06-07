@@ -78,6 +78,52 @@ def download_audio(job: Job) -> Path:
     return source
 
 
+def _split_guitar(stem_dir: Path, ext: str) -> None:
+    """Approximate a lead/rhythm split of the single Demucs guitar stem.
+
+    Not true source separation — a heuristic: HPSS gives harmonic (sustained)
+    vs percussive (transient) parts; we route sustained high content to "lead"
+    and the percussive + low-frequency body to "rhythm". The two sum exactly
+    back to the original guitar, so they're a lossless, blendable pair.
+    """
+    gpath = stem_dir / f"guitar.{ext}"
+    if not gpath.exists():
+        return
+    try:
+        import numpy as np
+        import librosa
+        import soundfile as sf
+        from scipy.signal import butter, sosfiltfilt
+
+        y, sr = librosa.load(str(gpath), sr=None, mono=False)
+        if y.ndim == 1:
+            y = y[None, :]
+        lead = np.zeros_like(y)
+        rhythm = np.zeros_like(y)
+        sos = butter(4, 1000.0 / (sr / 2), btype="low", output="sos")
+        for c in range(y.shape[0]):
+            harm, perc = librosa.effects.hpss(y[c])
+            low = sosfiltfilt(sos, harm)
+            lead[c] = harm - low      # sustained, higher register
+            rhythm[c] = perc + low    # strum transients + chordal body
+
+        for name, arr in (("guitar_lead", lead), ("guitar_rhythm", rhythm)):
+            if ext in ("wav", "flac"):
+                sf.write(str(stem_dir / f"{name}.{ext}"), arr.T, sr)
+            else:
+                wav = stem_dir / f"{name}.wav"
+                sf.write(str(wav), arr.T, sr)
+                subprocess.run(
+                    ["ffmpeg", "-y", "-i", str(wav), "-b:a", f"{config.MP3_BITRATE}k",
+                     str(stem_dir / f"{name}.{ext}")],
+                    check=True, capture_output=True,
+                )
+                wav.unlink(missing_ok=True)
+        gpath.unlink(missing_ok=True)   # replaced by the two derived channels
+    except Exception as exc:  # keep the combined guitar stem on failure
+        print(f"[guitar-split] skipped: {exc}", file=sys.stderr)
+
+
 def separate(job: Job, source: Path) -> None:
     """Run Demucs; populate job.stems with served file paths."""
     job.status = "separating"
@@ -111,6 +157,8 @@ def separate(job: Job, source: Path) -> None:
     # Demucs writes to <out>/<model>/<source-stem>/<stem>.<ext>
     ext = config.OUTPUT_FORMAT
     stem_dir = job.dir() / "stems" / job.model / source.stem
+    if config.GUITAR_SPLIT:
+        _split_guitar(stem_dir, ext)
     found = sorted(stem_dir.glob(f"*.{ext}"))
     if not found:
         raise RuntimeError(f"no stems found in {stem_dir}")

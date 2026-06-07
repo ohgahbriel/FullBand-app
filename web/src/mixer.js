@@ -28,9 +28,13 @@ export class Mixer {
       const audio = await this.ctx.decodeAudioData(buf);
       const gain = this.ctx.createGain();
       gain.connect(this.master);
+      const analyser = this.ctx.createAnalyser();   // post-fader tap for the meter
+      analyser.fftSize = 256;
+      gain.connect(analyser);
       this.tracks.push({
-        name, buffer: audio, gain, source: null,
+        name, buffer: audio, gain, analyser, source: null,
         volume: 1, muted: false, solo: false,
+        _meterBuf: new Uint8Array(analyser.fftSize),
       });
       this.duration = Math.max(this.duration, audio.duration);
       onProgress?.(++done, stems.length);
@@ -133,6 +137,17 @@ export class Mixer {
   setMasterVolume(v) { this.master.gain.value = v; }
 
   _track(name) { return this.tracks.find((t) => t.name === name); }
+
+  // Post-fader RMS level (0..1) for a track's meter.
+  level(track) {
+    const a = track.analyser;
+    if (!a) return 0;
+    a.getByteTimeDomainData(track._meterBuf);
+    const b = track._meterBuf;
+    let sum = 0;
+    for (let i = 0; i < b.length; i++) { const x = (b[i] - 128) / 128; sum += x * x; }
+    return Math.sqrt(sum / b.length);
+  }
 
   // The effective per-track gain the user is hearing right now (mute/solo
   // resolved, times volume), plus master. Used to render the mix server-side.

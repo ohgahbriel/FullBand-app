@@ -101,7 +101,14 @@ model weights, so it's slower; after that a song takes seconds–minutes
 depending on length.
 
 ### Mixer features
-- **Per-stem faders** with mute / solo, master, full-width waveform (click to seek).
+- **Per-stem faders** with mute / solo, master, full-width waveform (click to seek),
+  and a **live post-fader level meter** on each channel.
+- **Guitar lead / rhythm split** (experimental, `FULLBAND_GUITAR_SPLIT=1`) — the
+  single Demucs guitar stem is decomposed into two channels via an HPSS +
+  frequency heuristic: sustained/brighter content → **Gtr Lead**, percussive +
+  chordal body → **Gtr Rhythm**. They sum back to the original guitar exactly, so
+  it's a lossless, blendable pair — *not* true source separation. Set the env
+  var to `0` to keep one combined guitar stem.
 - **Visual metronome** — the BEAT dot pulses on each detected beat (downbeats
   accented), locked to the analysed beat times. The audible **Click** channel
   starts muted; unmute its fader to hear it.
@@ -122,9 +129,9 @@ depending on length.
 - **Stems .zip** — downloads every separated stem in one zip.
 
 > Source separation gives a **fixed** stem set (vocals / drums / bass / guitar /
-> piano / other). It cannot split *one* guitar into "guitar 1 / 2 / solo", nor
-> *lead vs backing* vocals — those need the original multitracks, which don't
-> exist for an arbitrary YouTube song.
+> piano / other). It cannot truly split one guitar into separate *players*, nor
+> *lead vs backing* vocals — those need the original multitracks. The guitar
+> lead/rhythm channels above are a **DSP heuristic**, not real separation.
 
 ## 4. Android app
 

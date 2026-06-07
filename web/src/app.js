@@ -7,13 +7,15 @@ let BACKEND = localStorage.getItem("fullband.backend") || DEFAULT_BACKEND;
 
 // Per-stem display: icon + fader cap colour. Falls back for unknown names.
 const STEMS = {
-  click:  { icon: "🔔", label: "Click",  cap: "#c9ced9" },
-  drums:  { icon: "🥁", label: "Drums",  cap: "#cdd3df" },
-  bass:   { icon: "🎸", label: "Bass",   cap: "#e0793f" },
-  guitar: { icon: "🎸", label: "Guitar", cap: "#d05c5c" },
-  piano:  { icon: "🎹", label: "Piano",  cap: "#9a7bd0" },
-  other:  { icon: "🎶", label: "Other",  cap: "#5fae8b" },
-  vocals: { icon: "🎤", label: "Vocals", cap: "#3aa0ff" },
+  click:          { icon: "🔔", label: "Click",      cap: "#c9ced9" },
+  drums:          { icon: "🥁", label: "Drums",      cap: "#cdd3df" },
+  bass:           { icon: "🎸", label: "Bass",       cap: "#e0793f" },
+  guitar:         { icon: "🎸", label: "Guitar",     cap: "#d05c5c" },
+  guitar_lead:    { icon: "🎸", label: "Gtr Lead",   cap: "#e8794f" },
+  guitar_rhythm:  { icon: "🎸", label: "Gtr Rhythm", cap: "#c25b6b" },
+  piano:          { icon: "🎹", label: "Piano",      cap: "#9a7bd0" },
+  other:          { icon: "🎶", label: "Other",      cap: "#5fae8b" },
+  vocals:         { icon: "🎤", label: "Vocals",     cap: "#3aa0ff" },
 };
 const meta = (name) =>
   STEMS[name] || { icon: "🎵", label: name[0].toUpperCase() + name.slice(1), cap: "#c9ced9" };
@@ -30,6 +32,7 @@ let seeking = false;
 let currentJob = null;   // {id, title, beats, ...}
 let beats = [];          // beat times (s) in the CURRENT timeline (tempo-scaled)
 let lastBeat = -1;       // last beat index pulsed
+let meterEls = {};       // track name -> meter fill element
 
 // transpose + tempo
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -139,6 +142,7 @@ async function loadStems(job) {
 function buildStrips() {
   const wrap = $("tracks");
   wrap.innerHTML = "";
+  meterEls = {};
   for (const t of mixer.tracks) {
     const m = meta(t.name);
     const el = document.createElement("div");
@@ -146,12 +150,14 @@ function buildStrips() {
     el.style.setProperty("--cap", m.cap);
     el.innerHTML = `
       <div class="fader">
+        <div class="meter"><div class="meter-fill"></div></div>
         <input class="vol" type="range" min="0" max="1" step="0.01" value="1" />
       </div>
       <button class="mute">M</button>
       <button class="solo">S</button>
       <div class="strip-icon">${m.icon}</div>
       <div class="strip-label">${m.label}</div>`;
+    meterEls[t.name] = el.querySelector(".meter-fill");
     el.querySelector(".vol").addEventListener("input", (e) =>
       mixer.setVolume(t.name, parseFloat(e.target.value)));
     el.querySelector(".mute").addEventListener("click", (e) =>
@@ -178,6 +184,7 @@ $("playPause").addEventListener("click", async () => {
     mixer.pause();
     $("playPause").textContent = "▶";
     cancelAnimationFrame(rafId);
+    clearMeters();
   } else {
     await mixer.play();
     $("playPause").textContent = "⏸";
@@ -323,6 +330,7 @@ mixer.onended = () => {
   cancelAnimationFrame(rafId);
   updateClock();
   drawWave(0);
+  clearMeters();
 };
 
 // click the waveform to seek
@@ -340,7 +348,22 @@ function tick() {
   updateClock();
   drawWave(mixer.duration ? t / mixer.duration : 0);
   updateMetronome(t);
+  updateMeters();
   if (mixer.playing) rafId = requestAnimationFrame(tick);
+}
+
+function updateMeters() {
+  for (const t of mixer.tracks) {
+    const el = meterEls[t.name];
+    if (!el) continue;
+    const lvl = Math.min(1, mixer.level(t) * 2.2);  // boost for visibility
+    el.style.height = `${lvl * 100}%`;
+    el.classList.toggle("hot", lvl > 0.82);
+  }
+}
+
+function clearMeters() {
+  for (const name in meterEls) { meterEls[name].style.height = "0%"; meterEls[name].classList.remove("hot"); }
 }
 
 // Count of beats at or before time t (the current beat index).
