@@ -3,103 +3,205 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0a0d16" />
+    <meta name="theme-color" content="#161616" />
     <title>FullBand</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <!-- ===== Landing: paste a link ===== -->
-    <section id="setup" class="setup">
-      <h1 class="logo">Full<span>Band</span></h1>
-      <p class="tagline">Paste a YouTube link — get a full mixer with every instrument on its own fader.</p>
-      <form id="urlForm" class="url-row">
-        <input id="url" type="url" inputmode="url" placeholder="https://youtube.com/watch?v=…" autocomplete="off" />
-        <button id="go" type="submit">Separate</button>
-      </form>
-      <p id="status" class="status"></p>
-      <div id="progressWrap" class="progress-wrap" hidden>
-        <div id="progressBar" class="progress-bar"></div>
-      </div>
-      <span id="device" class="device" title="separation backend — tap to change"></span>
-    </section>
+    <!-- ===== Program menu bar ===== -->
+    <header class="menubar">
+      <span class="lamp"></span>
+      <span class="wordmark">FULL<span>BAND</span></span>
 
-    <!-- ===== Player: the Jamzone-style mixer ===== -->
-    <section id="player" class="player" hidden>
-      <header class="player-top">
-        <span id="elapsed" class="t-elapsed">0:00</span>
-        <span id="nowPlaying" class="t-title">—</span>
-        <span id="remain" class="t-remain">-0:00</span>
-        <button id="back" class="back" title="New song">✕</button>
+      <div class="menu-wrap">
+        <button id="openBtn" class="mbtn" title="Open a song or your library">Open ▾</button>
+        <div id="openPanel" class="menu-pop" hidden>
+          <form id="urlForm" class="open-url">
+            <input id="url" type="url" inputmode="url" placeholder="Paste a YouTube link…" autocomplete="off" />
+            <button id="go" type="submit">Separate</button>
+          </form>
+          <p id="status" class="status"></p>
+          <div id="progressWrap" class="progress-wrap" hidden>
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
+          <div class="lib-head">Library</div>
+          <div id="libList" class="lib-list"></div>
+        </div>
+      </div>
+
+      <button id="addTrack" class="mbtn" title="Add an empty track to record or import into">+ Track</button>
+      <button id="recBtn" class="mbtn rec" title="Record into the armed track (R)"><span class="rec-dot"></span> Rec</button>
+      <button id="stageBtn" class="mbtn" title="Full-screen Stage mode">Stage</button>
+
+      <span class="menu-spacer"></span>
+      <span id="device" class="device" title="separation backend — tap to change"></span>
+    </header>
+    <input id="fileInput" type="file" accept="audio/*" hidden />
+
+    <!-- ===== DAW workspace ===== -->
+    <section id="player" class="player">
+      <!-- transport bar -->
+      <header class="transport-bar">
+        <div class="tb-group">
+          <span class="lamp"></span>
+          <button id="restart" class="tbtn" title="Back to start (Home)">⏮</button>
+          <button id="playPause" class="tbtn play" title="Play / pause (Space)">▶</button>
+          <button id="loopBtn" class="tbtn" title="A-B loop: set A, set B, then loop (L)">A–B</button>
+          <button id="countBtn" class="tbtn" title="One-bar count-in before play (C)">⌗</button>
+        </div>
+        <div class="clock">
+          <span id="elapsed" class="c-elapsed">0:00</span>
+          <span id="duration" class="c-total">/ 0:00</span>
+        </div>
+        <div class="tb-sep"></div>
+        <span id="nowPlaying" class="tb-title">—</span>
+
+        <div class="tb-spacer"></div>
+
+        <div class="tb-group">
+          <span class="readout"><span class="rk">BEAT</span><span id="beatDot" class="beat-dot"></span></span>
+          <span class="readout">
+            <span class="rk">KEY</span>
+            <button id="keyDown" class="step" title="Down a semitone">−</button>
+            <span id="key" class="rv" title="Double-click to reset">—</span>
+            <button id="keyUp" class="step" title="Up a semitone">+</button>
+          </span>
+          <span class="readout">
+            <span class="rk">BPM</span>
+            <button id="tempoDown" class="step" title="Slower">−</button>
+            <span id="bpm" class="rv" title="Double-click to reset">—</span>
+            <button id="tempoUp" class="step" title="Faster">+</button>
+          </span>
+        </div>
+
+        <div class="tb-sep"></div>
+        <span class="tb-master">
+          <span class="mk">MAIN</span>
+          <input id="master" class="h-vol" type="range" min="0" max="1" step="0.01" value="1" />
+        </span>
+
+        <div class="tb-sep"></div>
+        <div class="tb-group">
+          <span id="exportMsg" class="export-msg"></span>
+          <select id="clickSplit" class="fmt" title="stereo split: click in one ear, mix in the other">
+            <option value="off">Stereo mix</option>
+            <option value="left">Click L · mix R</option>
+            <option value="right">Click R · mix L</option>
+          </select>
+          <select id="fmt" class="fmt" title="mix format">
+            <option value="mp3">MP3</option>
+            <option value="wav">WAV</option>
+            <option value="flac">FLAC</option>
+            <option value="ogg">OGG</option>
+            <option value="m4a">M4A</option>
+          </select>
+          <button id="saveMix" class="exp" title="Save the current mix">↓ Mix</button>
+          <button id="saveZip" class="exp" title="Download every stem in a zip">↓ Stems</button>
+        </div>
       </header>
 
-      <div class="viz" id="viz">
+      <!-- chords + lyrics marker strip -->
+      <div class="markers" id="markers">
         <span id="vizBadge" class="viz-badge" hidden></span>
-        <div class="viz-chords">
+        <div class="mk-chords">
           <span class="viz-chord" id="chordPrev"></span>
           <span class="viz-chord now" id="chordNow">—</span>
           <span class="viz-chord next1" id="chordNext1"></span>
           <span class="viz-chord" id="chordNext2"></span>
         </div>
-        <div class="viz-lyrics">
-          <span class="viz-line" id="lyricPrev"></span>
+        <div class="mk-lyrics">
+          <span class="viz-line lyricPrev" id="lyricPrev"></span>
           <span class="viz-line now" id="lyricNow"></span>
           <span class="viz-line" id="lyricNext"></span>
         </div>
       </div>
 
-      <div class="stage">
-        <canvas id="wave" class="wave"></canvas>
-        <div class="transport">
-          <button id="restart" class="t-btn" title="Back to start">⏮</button>
-          <button id="playPause" class="play-btn" title="Play / pause">▶</button>
+      <!-- timeline ruler -->
+      <div class="ruler">
+        <div class="ruler-spacer"></div>
+        <div class="ruler-track">
+          <canvas id="ruler" class="ruler-canvas"></canvas>
         </div>
       </div>
 
-      <div class="infobar">
-        <span class="chip metro"><span id="beatDot" class="beat-dot"></span> <span class="chip-k">BEAT</span></span>
-        <span class="chip stepper">
-          <span class="chip-k">KEY</span>
-          <button id="keyDown" class="step" title="Transpose down a semitone">−</button>
-          <span id="key" class="step-val" title="Double-click to reset">—</span>
-          <button id="keyUp" class="step" title="Transpose up a semitone">+</button>
-        </span>
-        <span class="chip stepper">
-          <button id="tempoDown" class="step" title="Slower">−</button>
-          <span id="bpm" class="step-val" title="Double-click to reset">—</span>
-          <span class="chip-k">BPM</span>
-          <button id="tempoUp" class="step" title="Faster">+</button>
-        </span>
-        <span class="ib-spacer"></span>
-        <span id="exportMsg" class="export-msg"></span>
-        <select id="clickSplit" class="fmt" title="stereo split: click in one ear, mix in the other">
-          <option value="off">Stereo mix</option>
-          <option value="left">Click L · mix R</option>
-          <option value="right">Click R · mix L</option>
-        </select>
-        <select id="fmt" class="fmt" title="mix format">
-          <option value="mp3">MP3</option>
-          <option value="wav">WAV</option>
-          <option value="flac">FLAC</option>
-          <option value="ogg">OGG</option>
-          <option value="m4a">M4A</option>
-        </select>
-        <button id="saveMix" class="exp" title="Save the current mix">⬇ Mix</button>
-        <button id="saveZip" class="exp" title="Download every stem in a zip">⬇ Stems .zip</button>
-        <span id="device2" class="chip device" title="separation backend — tap to change"></span>
-      </div>
-
-      <div id="mixer" class="mixer">
-        <div id="tracks" class="tracks"></div>
-        <div class="strip master" id="masterStrip">
-          <div class="fader">
-            <input id="master" class="vol" type="range" min="0" max="1" step="0.01" value="1" />
+      <!-- track lanes (built by JS) + playhead/loop overlay -->
+      <div class="lanes" id="lanes">
+        <div class="lane-empty" id="laneEmpty">
+          <div class="le-card">
+            <div class="le-mark"><span class="lamp"></span></div>
+            <div class="le-title">No project loaded</div>
+            <div class="le-sub">Hit <b>Open ▾</b> to break a song into tracks, or <b>+ Track</b> to record your own.</div>
+            <div class="le-actions">
+              <button id="emptyOpen" class="le-btn">Open ▾</button>
+              <button id="emptyAdd" class="le-btn">+ Track</button>
+            </div>
           </div>
-          <button class="mute placeholder" disabled></button>
-          <div class="strip-icon">🎚️</div>
-          <div class="strip-label">Master</div>
+        </div>
+        <div class="lane-overlay" id="laneOverlay">
+          <div class="loop-region" id="loopRegion"></div>
+          <div class="loop-flag" id="loopFlag"></div>
+          <div class="playhead" id="playhead"></div>
         </div>
       </div>
     </section>
+
+    <!-- ===== Stage Mode overlay ===== -->
+    <section id="stage" class="stage-mode" hidden>
+      <div class="st-top">
+        <button id="st-toggle" class="st-top-btn">≡ Songs</button>
+        <button id="st-exit" class="st-top-btn">✕ Exit</button>
+      </div>
+
+      <div class="st-body">
+        <div id="st-title" class="st-title">—</div>
+        <div id="st-meta" class="st-meta">—</div>
+
+        <div id="st-bar" class="st-bar-wrap">
+          <canvas id="st-wave" class="st-wave"></canvas>
+          <div id="st-fill" class="st-fill"></div>
+        </div>
+
+        <div class="st-time">
+          <span id="st-elapsed" class="st-time-left">0:00</span>
+          <span id="st-remain" class="st-time-right">-0:00</span>
+        </div>
+
+        <div class="st-steppers">
+          <div class="st-stepper">
+            <span class="st-label">KEY</span>
+            <div class="st-stepper-row">
+              <button id="st-keyDown" class="st-step">−</button>
+              <span id="st-key" class="st-value">—</span>
+              <button id="st-keyUp" class="st-step">+</button>
+            </div>
+          </div>
+          <div class="st-stepper">
+            <span class="st-label">TEMPO</span>
+            <div class="st-stepper-row">
+              <button id="st-tempoDown" class="st-step">−</button>
+              <span id="st-bpm" class="st-value">—</span>
+              <button id="st-tempoUp" class="st-step">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="st-transport">
+          <button id="st-prev" class="st-btn st-btn-lg">◀ PREV</button>
+          <button id="st-play" class="st-btn st-btn-play">▶</button>
+          <button id="st-next" class="st-btn st-btn-lg">NEXT ▶</button>
+        </div>
+      </div>
+
+      <div class="st-footer">
+        <span id="st-pos">Song 1 of 1</span>
+        <label class="st-autoplay">
+          <input type="checkbox" id="st-auto" checked />
+          <span>Autoplay</span>
+        </label>
+      </div>
+    </section>
+
+    <div id="st-list" class="st-drawer" hidden></div>
 
     <script type="module" src="/src/app.js"></script>
   </body>

@@ -1,0 +1,12 @@
+[build]
+  base    = "web"
+  publish = "dist"
+  command = "npm ci && npm run build"
+
+# The Python backend (server/) runs separately — deploy it to
+# Render, Fly.io, Railway, or your own VPS. Once deployed, open
+# the app, click on the device chip in the menubar, and enter the
+# backend URL (e.g. https://fullband-api.onrender.com).
+#
+# To proxy API calls through Netlify instead, add a [[redirects]]
+# block here and set the 200 status + force=true.
