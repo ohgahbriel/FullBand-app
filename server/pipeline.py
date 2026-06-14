@@ -4,9 +4,11 @@ Kept free of any web framework so it can be unit-tested or driven from a CLI.
 """
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -30,9 +32,61 @@ class Job:
     lyrics_source: str = ""         # "captions" | "whisper" | ""
     stems: list[dict] = field(default_factory=list)  # [{name, url}]
     error: str = ""
+    created: float = field(default_factory=time.time)  # epoch seconds
 
     def dir(self) -> Path:
         return config.DATA_DIR / self.id
+
+    def save(self) -> None:
+        """Persist the finished job so the library survives a server restart."""
+        data = {
+            "id": self.id, "url": self.url, "model": self.model,
+            "title": self.title, "bpm": self.bpm, "key": self.key,
+            "beats": self.beats, "chords": self.chords, "lyrics": self.lyrics,
+            "lyrics_source": self.lyrics_source, "stems": self.stems,
+            "created": self.created,
+        }
+        (self.dir() / "job.json").write_text(
+            json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+    @classmethod
+    def load(cls, job_dir: Path) -> "Job | None":
+        """Rehydrate a job from disk. Falls back to scanning the stem folder for
+        runs that predate job.json (title survives, analysis data doesn't)."""
+        meta = job_dir / "job.json"
+        try:
+            if meta.exists():
+                d = json.loads(meta.read_text(encoding="utf-8"))
+                job = cls(id=d["id"], url=d.get("url", ""), model=d.get("model", config.MODEL))
+                job.title = d.get("title", "")
+                job.bpm = d.get("bpm", 0.0)
+                job.key = d.get("key", "")
+                job.beats = d.get("beats", [])
+                job.chords = d.get("chords", [])
+                job.lyrics = d.get("lyrics", [])
+                job.lyrics_source = d.get("lyrics_source", "")
+                job.stems = d.get("stems", [])
+                job.created = d.get("created", meta.stat().st_mtime)
+            else:
+                job = cls(id=job_dir.name, url="")
+                stem_dir = job_dir / "stems" / job.model / "source"
+                found = sorted(stem_dir.glob(f"*.{config.OUTPUT_FORMAT}"))
+                if not found:
+                    return None
+                job.stems = [{"name": f.stem, "url": f"/api/files/{job.id}/{f.name}"}
+                             for f in found]
+                title_file = job_dir / "title.txt"
+                if title_file.exists():
+                    job.title = title_file.read_text(
+                        encoding="utf-8", errors="replace").strip()
+                job.created = stem_dir.stat().st_mtime
+            if not job.stems:
+                return None
+            job.status, job.progress = "done", 1.0
+            return job
+        except Exception as exc:
+            print(f"[library] skipped {job_dir.name}: {exc}", file=sys.stderr)
+            return None
 
 
 def _resolve_device() -> str:
@@ -358,6 +412,7 @@ def run(job: Job) -> None:
         fetch_lyrics(job, source)
         job.status = "done"
         job.progress = 1.0
+        job.save()
     except Exception as exc:  # surface the message to the client
         job.status = "error"
         job.error = str(exc)

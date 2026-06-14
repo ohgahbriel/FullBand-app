@@ -10,8 +10,17 @@ const http = require("http");
 const path = require("path");
 const fs = require("fs");
 
-const ROOT = path.join(__dirname, "..");
-const SERVER_DIR = path.join(ROOT, "server");
+// Locate the backend. In dev the shell sits in <repo>/desktop so ../server works;
+// once packaged it lives in %LOCALAPPDATA%\Programs\FullBand, so fall back to the
+// known repo location on this machine (the backend needs the GPU venv that lives
+// there — it isn't, and can't practically be, bundled into the installer).
+const SERVER_CANDIDATES = [
+  path.join(__dirname, "..", "server"),
+  path.join(process.resourcesPath || "", "server"),
+  "C:\\Users\\User\\Projects\\FullBand-app\\server",
+];
+const SERVER_DIR =
+  SERVER_CANDIDATES.find((d) => fs.existsSync(path.join(d, "main.py"))) || SERVER_CANDIDATES[0];
 const PYTHON = path.join(SERVER_DIR, ".venv", "Scripts", "python.exe");
 const HEALTH_URL = "http://127.0.0.1:8000/api/health";
 const UI_URL = "http://localhost:8000/";
@@ -46,8 +55,12 @@ function startBackend() {
   }
   const proc = spawn(PYTHON, ["main.py"], { cwd: SERVER_DIR });
   // Backend output goes to a log file, not the console — so the silent launcher
-  // (FullBand.vbs) shows no green log window. Tail desktop/backend.log to debug.
-  const log = fs.createWriteStream(path.join(__dirname, "backend.log"), { flags: "a" });
+  // (FullBand.vbs) shows no green log window. When packaged, __dirname is inside
+  // the read-only asar, so write to the app's userData dir instead.
+  let logPath;
+  try { logPath = path.join(app.getPath("userData"), "backend.log"); }
+  catch { logPath = path.join(__dirname, "backend.log"); }
+  const log = fs.createWriteStream(logPath, { flags: "a" });
   log.write(`\n--- backend started ${new Date().toISOString()} ---\n`);
   proc.stdout.on("data", (d) => log.write(d));
   proc.stderr.on("data", (d) => log.write(d));
@@ -71,6 +84,7 @@ function createWindow() {
     minHeight: 600,
     backgroundColor: "#0a0d16",
     title: "FullBand",
+    icon: path.join(__dirname, "build", "icon.ico"),
     autoHideMenuBar: true,
     webPreferences: { contextIsolation: true },
   });

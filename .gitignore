@@ -15,6 +15,7 @@ web/.vite/
 desktop/node_modules/
 desktop/dist/
 desktop/backend.log
+desktop/build/_icons/
 
 # Build artifacts
 artifacts/

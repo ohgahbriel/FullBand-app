@@ -3,11 +3,38 @@
   "version": "0.1.0",
   "private": true,
   "description": "FullBand desktop app — wraps the mixer UI and auto-starts the local GPU backend.",
+  "author": "ohgahbriel",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
   },
   "devDependencies": {
-    "electron": "^33.2.0"
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.ohgahbriel.fullband",
+    "productName": "FullBand",
+    "electronDist": "node_modules/electron/dist",
+    "icon": "build/icon.ico",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "loading.html", "package.json"],
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.ico",
+      "artifactName": "FullBand Setup ${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "FullBand",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    }
   }
 }

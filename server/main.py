@@ -1,16 +1,19 @@
 """FullBand API server.
 
 Endpoints
-  POST /api/jobs            {url, model?}      -> {id}
-  GET  /api/jobs/{id}                          -> Job status (+ stem urls when done)
-  GET  /api/files/{id}/{f}                     -> a separated stem file
-  GET  /api/health                             -> {device, model}
+  POST   /api/jobs            {url, model?}      -> {id} (reuses a finished job for the same url)
+  GET    /api/jobs                               -> library: every finished/running job
+  GET    /api/jobs/{id}                          -> Job status (+ stem urls when done)
+  DELETE /api/jobs/{id}                          -> remove a song from the library
+  GET    /api/files/{id}/{f}                     -> a separated stem file
+  GET    /api/health                             -> {device, model}
 
 Run:  python main.py   (or: uvicorn main:app --host 0.0.0.0 --port 8000)
 """
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import uuid
 import zipfile
@@ -38,6 +41,13 @@ app.add_middleware(
 _executor = ThreadPoolExecutor(max_workers=1)
 _jobs: dict[str, Job] = {}
 
+# Rebuild the library from disk so past separations survive restarts.
+for _dir in sorted(config.DATA_DIR.iterdir() if config.DATA_DIR.is_dir() else []):
+    if _dir.is_dir():
+        _loaded = Job.load(_dir)
+        if _loaded:
+            _jobs[_loaded.id] = _loaded
+
 
 class CreateJob(BaseModel):
     url: str
@@ -51,13 +61,42 @@ def health():
 
 @app.post("/api/jobs")
 def create_job(body: CreateJob):
-    if not body.url.strip():
+    url = body.url.strip()
+    if not url:
         raise HTTPException(400, "url is required")
-    job = Job(id=uuid.uuid4().hex[:12], url=body.url.strip(),
-              model=body.model or config.MODEL)
+    model = body.model or config.MODEL
+    # Same song, same model, already separated: hand back the cached job
+    # instead of burning GPU minutes again.
+    for existing in _jobs.values():
+        if existing.url == url and existing.model == model and existing.status == "done":
+            return {"id": existing.id, "cached": True}
+    job = Job(id=uuid.uuid4().hex[:12], url=url, model=model)
     _jobs[job.id] = job
     _executor.submit(pipeline.run, job)
     return {"id": job.id}
+
+
+@app.get("/api/jobs")
+def list_jobs():
+    """The library: newest first, errors omitted."""
+    jobs = sorted(_jobs.values(), key=lambda j: j.created, reverse=True)
+    return {"jobs": [
+        {"id": j.id, "title": j.title or "Untitled", "status": j.status,
+         "bpm": j.bpm, "key": j.key, "stems": len(j.stems), "created": j.created}
+        for j in jobs if j.status != "error"
+    ]}
+
+
+@app.delete("/api/jobs/{job_id}")
+def delete_job(job_id: str):
+    job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "no such job")
+    if job.status in ("downloading", "separating"):
+        raise HTTPException(409, "job is still processing")
+    _jobs.pop(job_id, None)
+    shutil.rmtree(job.dir(), ignore_errors=True)
+    return {"ok": True}
 
 
 @app.get("/api/jobs/{job_id}")
