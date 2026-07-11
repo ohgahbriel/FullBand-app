@@ -188,8 +188,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: linear-gradient(180deg, var(--amber-hi), var(--amber));
   box-shadow: 0 0 14px rgba(240,164,60,.4);
 }
-.tbtn.play { width: 46px; font-size: 16px; color: var(--text); }
-.tbtn.play.playing { color: var(--amber); border-color: rgba(240,164,60,.5); }
+.tbtn.play { width: 46px; font-size: 16px; color: var(--amber-hi); }
+.tbtn.play:hover { border-color: rgba(240,164,60,.5); }
+.tbtn.play.playing { color: var(--amber); border-color: rgba(240,164,60,.5); box-shadow: 0 0 12px rgba(240,164,60,.25); }
 
 .clock { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .clock .c-elapsed { font-size: 17px; font-weight: 600; color: var(--text); }
@@ -200,7 +201,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* readout chips (KEY / BPM / BEAT) */
 .readout { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border-radius: 5px; background: var(--bg); border: 1px solid var(--line); font-family: var(--mono); }
 .readout .rk { font-size: 9px; letter-spacing: .12em; color: var(--dim); font-weight: 600; }
-.readout .rv { font-size: 13px; font-variant-numeric: tabular-nums; min-width: 30px; text-align: center; }
+.readout .rv { font-size: 13px; font-variant-numeric: tabular-nums; min-width: 30px; text-align: center; white-space: nowrap; }
 .readout .rv.shifted { color: var(--amber); }
 .step { width: 20px; height: 20px; border-radius: 4px; font-size: 13px; font-weight: 700; line-height: 1; background: var(--raise); color: var(--muted); border: 1px solid var(--line-2); display: inline-flex; align-items: center; justify-content: center; }
 .step:hover { color: var(--amber); border-color: var(--amber); }
@@ -270,11 +271,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: linear-gradient(180deg, var(--panel), var(--panel-2));
   border-right: 1px solid #000;
 }
-.tcp-color { background: var(--cap, #888); grid-row: 1 / 3; }
+.tcp-color { background: linear-gradient(180deg, var(--cap, #888), color-mix(in srgb, var(--cap, #888) 70%, #000)); grid-row: 1 / 3;
+  box-shadow: inset -1px 0 3px rgba(0,0,0,.45), 2px 0 9px -3px var(--cap, #888); }
 .tcp-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
 .tcp-row1 { display: flex; align-items: center; gap: 7px; }
 .tcp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13px; }
-.tcp-tag { font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: .08em; color: var(--cap, #aaa); border: 1px solid var(--line-2); border-radius: 3px; padding: 1px 5px; }
+.tcp-tag { font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: .08em; color: var(--cap, #aaa);
+  background: color-mix(in srgb, var(--cap, #888) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cap, #888) 45%, var(--line-2)); border-radius: 3px; padding: 1px 5px; }
 .tcp-row2 { display: flex; align-items: center; gap: 6px; }
 
 .mute, .solo {
@@ -533,3 +537,48 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .st-bar-wrap { height: 56px; }
   .st-transport { gap: 10px; }
 }
+
+/* ============================================================
+   Polish pass — focus states, scrollbars, depth, richer accents
+   ============================================================ */
+
+/* keyboard focus rings (were invisible) */
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; border-radius: 4px; }
+.lane-wave:focus-visible, .ruler-canvas:focus-visible { outline-offset: -2px; }
+
+/* dark, slim scrollbars to match the console */
+.lanes, .lib-list, .st-drawer { scrollbar-width: thin; scrollbar-color: #3d3d3d transparent; }
+.lanes::-webkit-scrollbar, .lib-list::-webkit-scrollbar, .st-drawer::-webkit-scrollbar { width: 11px; height: 11px; }
+.lanes::-webkit-scrollbar-thumb, .lib-list::-webkit-scrollbar-thumb, .st-drawer::-webkit-scrollbar-thumb {
+  background: #363636; border: 3px solid transparent; background-clip: padding-box; border-radius: 7px;
+}
+.lanes::-webkit-scrollbar-thumb:hover, .lib-list::-webkit-scrollbar-thumb:hover, .st-drawer::-webkit-scrollbar-thumb:hover {
+  background: #4c4c4c; background-clip: padding-box;
+}
+.lanes::-webkit-scrollbar-track { background: transparent; }
+
+/* recessed track area + interactive lane rows */
+.lanes { box-shadow: inset 0 7px 12px -9px rgba(0,0,0,.7); }
+.lane:hover .tcp { background: linear-gradient(180deg, #2a2a2a, #242424); }
+.lane:hover .lane-wave { background: #191919; }
+.lane:nth-child(even):hover .lane-wave { background: #161616; }
+.markers { box-shadow: inset 0 1px 0 rgba(255,255,255,.025); }
+
+/* Stage: atmospheric glow + a proper scrubber */
+.st-body { position: relative; isolation: isolate; }
+.st-body::before {
+  content: ""; position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%);
+  width: min(600px, 82%); height: 300px; border-radius: 50%; z-index: -1; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(240,164,60,.16), transparent 72%); filter: blur(24px);
+}
+.st-title { text-shadow: 0 2px 24px rgba(0,0,0,.5); letter-spacing: -.01em; }
+.st-bar-wrap { box-shadow: inset 0 2px 8px rgba(0,0,0,.45); }
+.st-fill {
+  background: linear-gradient(90deg, rgba(240,164,60,.10), rgba(240,164,60,.30));
+  border-right: 2px solid var(--amber-hi); box-shadow: 0 0 14px rgba(240,164,60,.5);
+}
+.st-btn-play { box-shadow: 0 0 30px rgba(240,164,60,.35), inset 0 1px 0 rgba(255,255,255,.35); }
+
+/* Empty state: a touch more presence */
+.le-title { font-size: 20px; letter-spacing: -.01em; }
+.le-mark .lamp { width: 22px; height: 22px; }

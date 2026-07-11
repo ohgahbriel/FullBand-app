@@ -1016,6 +1016,13 @@ function updatePlayhead(ratio) {
 }
 
 // --- waveform painting (per lane) ----------------------------------------
+// #rrggbb -> rgba() string at alpha a
+function hexA(hex, a) {
+  const m = (hex || "#888888").replace("#", "");
+  const r = parseInt(m.slice(0, 2), 16), g = parseInt(m.slice(2, 4), 16), b = parseInt(m.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
 function drawLane(name) {
   const c = laneCanvases[name];
   if (!c) return;
@@ -1032,18 +1039,37 @@ function drawLane(name) {
   const peaks = lanePeaks[name];
   if (!peaks) return;
   const cap = meta(name).cap;
-  const mid = h / 2;
-  const n = peaks.length, bw = w / n;
-  ctx.fillStyle = cap;
-  ctx.globalAlpha = 0.82;
-  for (let i = 0; i < n; i++) {
-    const x = i * bw;
-    const amp = peaks[i] * (h * 0.46);
-    ctx.fillRect(x, mid - amp, Math.max(0.7, bw * 0.85), amp * 2 || 1);
+  const mid = h / 2, maxA = h * 0.46;
+  const n = peaks.length, step = w / n;
+
+  // filled, mirrored envelope with a glassy vertical gradient (brighter core)
+  ctx.beginPath();
+  ctx.moveTo(0, mid);
+  for (let i = 0; i < n; i++) ctx.lineTo(i * step, mid - peaks[i] * maxA);
+  ctx.lineTo(w, mid);
+  for (let i = n - 1; i >= 0; i--) ctx.lineTo(i * step, mid + peaks[i] * maxA);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, mid - maxA, 0, mid + maxA);
+  g.addColorStop(0, hexA(cap, 0.14));
+  g.addColorStop(0.5, hexA(cap, 0.55));
+  g.addColorStop(1, hexA(cap, 0.14));
+  ctx.fillStyle = g;
+  ctx.fill();
+
+  // crisp peak contour, top + bottom
+  ctx.strokeStyle = hexA(cap, 0.92);
+  ctx.lineWidth = 1;
+  ctx.lineJoin = "round";
+  for (const sign of [-1, 1]) {
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = i * step, y = mid + sign * peaks[i] * maxA;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
   }
-  ctx.globalAlpha = 1;
   // centre baseline
-  ctx.fillStyle = "rgba(255,255,255,.05)";
+  ctx.fillStyle = "rgba(255,255,255,.04)";
   ctx.fillRect(0, mid, w, 1);
 }
 
@@ -1217,13 +1243,16 @@ function drawStageWave() {
   const bins = Math.max(1, Math.round(w / 2));
   const peaks = mixer.getPeaks(bins);
   ctx.clearRect(0, 0, w, h);
-  const mid = h / 2;
-  const bw = w / bins;
-  ctx.fillStyle = "rgba(255,255,255,0.08)";
-  for (let i = 0; i < bins; i++) {
-    const amp = peaks[i] * (h * 0.44);
-    ctx.fillRect(i * bw, mid - amp, Math.max(1, bw * 0.85), amp * 2 || 1);
-  }
+  const mid = h / 2, maxA = h * 0.42, step = w / bins;
+  // amber-tinted filled envelope so the scrubber reads as a real waveform
+  ctx.beginPath();
+  ctx.moveTo(0, mid);
+  for (let i = 0; i < bins; i++) ctx.lineTo(i * step, mid - peaks[i] * maxA);
+  ctx.lineTo(w, mid);
+  for (let i = bins - 1; i >= 0; i--) ctx.lineTo(i * step, mid + peaks[i] * maxA);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(240,164,60,.22)";
+  ctx.fill();
 }
 
 // --- wire stage controls ---
