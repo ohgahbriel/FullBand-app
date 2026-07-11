@@ -1,6 +1,6 @@
 {
   "name": "fullband-desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "FullBand desktop app — wraps the mixer UI and auto-starts the local GPU backend.",
   "author": "ohgahbriel",

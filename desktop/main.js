@@ -88,6 +88,7 @@ function createWindow() {
     autoHideMenuBar: true,
     webPreferences: { contextIsolation: true },
   });
+  win.maximize();                              // standing rule: launch maximized
   win.on("closed", () => { win = null; });
   return win.loadFile(path.join(__dirname, "loading.html"));
 }
