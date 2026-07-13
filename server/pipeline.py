@@ -219,11 +219,12 @@ def separate(job: Job, source: Path) -> None:
 
     last_out = ""
     ok = False
-    for i, (dev, seg) in enumerate(attempts):
+    i = 0
+    while i < len(attempts):
+        dev, seg = attempts[i]
         if i:
             job.progress = 0.0
-            print(f"[separate] retrying on device={dev} segment={seg} "
-                  f"(previous attempt failed)", file=sys.stderr)
+            print(f"[separate] retrying on device={dev} segment={seg}", file=sys.stderr)
         cmd = [
             sys.executable, "-m", "demucs",
             "-n", job.model, "-d", dev, "--segment", str(seg), "-o", out_dir,
@@ -238,14 +239,26 @@ def separate(job: Job, source: Path) -> None:
             break
         oom = any(k in last_out.lower()
                   for k in ("out of memory", "cuda out of memory", "outofmemory"))
-        # A non-memory failure won't be fixed by a smaller segment or CPU — stop.
-        if not oom and dev != "cpu":
-            break
+        # Any CUDA failure that ISN'T out-of-memory (e.g. the card is too new/old
+        # for this PyTorch build — Blackwell/RTX 50-series on cu121) won't be
+        # fixed by a smaller segment; jump straight to the CPU fallback.
+        if dev == "cuda" and not oom:
+            cpu_i = next((j for j in range(i + 1, len(attempts)) if attempts[j][0] == "cpu"), None)
+            if cpu_i is None:
+                break
+            i = cpu_i
+            continue
+        i += 1
 
     if not ok:
         print(f"[separate] all attempts failed:\n{last_out}", file=sys.stderr)
-        hint = ("out of GPU memory — try FULLBAND_DEVICE=cpu"
-                if "memory" in last_out.lower() else "see the backend log")
+        low = last_out.lower()
+        if "memory" in low:
+            hint = "out of GPU memory"
+        elif any(k in low for k in ("no kernel image", "sm_", "not compatible", "kernel image")):
+            hint = "GPU needs a newer PyTorch — reinstall torch from the cu128 index"
+        else:
+            hint = "see the backend log"
         raise RuntimeError(f"demucs separation failed ({hint})")
 
     # Demucs writes to <out>/<model>/<source-stem>/<stem>.<ext>

@@ -61,14 +61,19 @@ if (-not (Test-Path $vpy)) {
 Say "Upgrading pip"
 & $vpy -m pip install --upgrade pip --quiet
 
-# GPU? -> CUDA PyTorch, else CPU
-$gpu = $false
-try { & nvidia-smi *> $null; if ($LASTEXITCODE -eq 0) { $gpu = $true } } catch {}
+# GPU? -> CUDA PyTorch, else CPU. Blackwell (RTX 50-series) needs the cu128
+# build; older cards use cu121.
+$gpu = $false; $gpuName = ""
+try {
+  $gpuName = (& nvidia-smi --query-gpu=name --format=csv,noheader) 2>$null | Select-Object -First 1
+  if ($LASTEXITCODE -eq 0 -and $gpuName) { $gpu = $true }
+} catch {}
 if ($gpu) {
-  Say "NVIDIA GPU detected -installing CUDA PyTorch (cu121)"
-  & $vpy -m pip install torch --index-url https://download.pytorch.org/whl/cu121
+  $cuda = if ($gpuName -match "RTX\s*50") { "cu128" } else { "cu121" }
+  Say "NVIDIA GPU detected ($($gpuName.Trim())) - installing CUDA PyTorch ($cuda)"
+  & $vpy -m pip install torch --index-url "https://download.pytorch.org/whl/$cuda"
 } else {
-  Say "No NVIDIA GPU -installing CPU PyTorch (separation will be SLOW)" "Yellow"
+  Say "No NVIDIA GPU - installing CPU PyTorch (separation will be SLOW)" "Yellow"
   & $vpy -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 }
 
