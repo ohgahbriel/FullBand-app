@@ -34,9 +34,21 @@
       <button id="stageBtn" class="mbtn" title="Full-screen Stage mode">Stage</button>
 
       <span class="menu-spacer"></span>
+      <button id="gpuBtn" class="mbtn gpu-btn" title="Install GPU acceleration for much faster separation" hidden>⚡ Enable GPU</button>
       <span id="device" class="device" title="separation backend — tap to change"></span>
     </header>
     <input id="fileInput" type="file" accept="audio/*" hidden />
+
+    <!-- GPU-enable progress overlay -->
+    <div id="gpuOverlay" class="gpu-overlay" hidden>
+      <div class="gpu-card">
+        <div class="gpu-spin"></div>
+        <div class="gpu-title" id="gpuTitle">Enabling GPU acceleration…</div>
+        <div class="gpu-sub">Downloading the GPU engine (~2.5 GB). This runs once and can take several minutes — keep FullBand open.</div>
+        <pre class="gpu-log" id="gpuLog"></pre>
+        <button id="gpuClose" class="gpu-close" hidden>Close</button>
+      </div>
+    </div>
 
     <!-- ===== DAW workspace ===== -->
     <section id="player" class="player">

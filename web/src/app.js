@@ -1273,6 +1273,42 @@ $("st-bar").addEventListener("pointerdown", (e) => {
   mixer.seek(ratio * mixer.duration);
 });
 
+// --- GPU acceleration (desktop app only; browser/dev uses setup.ps1's torch) ---
+async function initGpu() {
+  const btn = $("gpuBtn");
+  if (!btn || !window.fullband?.isDesktop) return;   // only the bundled desktop app
+  try {
+    const info = await fetch(`${BACKEND}/api/gpu`).then((r) => r.json());
+    btn.hidden = !(info.has_nvidia && !info.cuda_enabled);
+    if (!btn.hidden) btn.title = `Enable GPU acceleration on your ${info.gpu_name}`;
+  } catch { btn.hidden = true; }
+}
+$("gpuBtn")?.addEventListener("click", async () => {
+  if (!window.fullband?.enableGpu) return;
+  const overlay = $("gpuOverlay"), log = $("gpuLog"), title = $("gpuTitle"), closeBtn = $("gpuClose");
+  overlay.hidden = false; log.textContent = ""; closeBtn.hidden = true;
+  title.textContent = "Enabling GPU acceleration…";
+  window.fullband.onGpuProgress((line) => {
+    if (!line) return;
+    log.textContent += line + "\n";
+    log.scrollTop = log.scrollHeight;
+  });
+  try {
+    const res = await window.fullband.enableGpu();   // on success the app reloads onto the GPU backend
+    if (res && res.ok === false) {
+      title.textContent = "Couldn't enable the GPU";
+      if (res.error) log.textContent += "\n" + res.error + "\n";
+      closeBtn.hidden = false;
+    }
+  } catch (e) {
+    title.textContent = "Couldn't enable the GPU";
+    log.textContent += "\n" + (e?.message || e) + "\n";
+    closeBtn.hidden = false;
+  }
+});
+$("gpuClose")?.addEventListener("click", () => { $("gpuOverlay").hidden = true; });
+
 refreshHealth();
 loadLibrary();
 updateEmpty();
+initGpu();

@@ -16,6 +16,8 @@ desktop/node_modules/
 desktop/dist/
 desktop/backend.log
 desktop/build/_icons/
+desktop/_bundle/
+desktop/runtime/
 
 # Build artifacts
 artifacts/

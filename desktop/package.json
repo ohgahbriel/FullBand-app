@@ -1,8 +1,8 @@
 {
   "name": "fullband-desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "FullBand desktop app — wraps the mixer UI and auto-starts the local GPU backend.",
+  "description": "FullBand desktop app — self-contained: bundles the Python engine, ffmpeg and the UI.",
   "author": "ohgahbriel",
   "main": "main.js",
   "scripts": {
@@ -19,7 +19,17 @@
     "electronDist": "node_modules/electron/dist",
     "icon": "build/icon.ico",
     "directories": { "output": "dist" },
-    "files": ["main.js", "loading.html", "package.json"],
+    "files": ["main.js", "preload.js", "loading.html", "package.json"],
+    "extraResources": [
+      { "from": "_bundle/python", "to": "pyruntime" },
+      { "from": "_bundle/ffmpeg", "to": "ffmpeg" },
+      { "from": "../web/dist", "to": "web" },
+      {
+        "from": "../server",
+        "to": "server",
+        "filter": ["**/*", "!.venv", "!.venv/**", "!data", "!data/**", "!**/__pycache__/**", "!**/*.pyc"]
+      }
+    ],
     "win": {
       "target": ["nsis"],
       "icon": "build/icon.ico",

@@ -59,6 +59,34 @@ def health():
     return {"device": pipeline._resolve_device(), "model": config.MODEL}
 
 
+def _nvidia_name() -> str:
+    """Name of the first NVIDIA GPU, or '' if none/undetectable."""
+    try:
+        r = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=8,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip().splitlines()[0].strip()
+    except Exception:
+        pass
+    return ""
+
+
+@app.get("/api/gpu")
+def gpu_info():
+    """Whether an NVIDIA GPU is present and whether Torch can use it. The desktop
+    app uses this to offer a one-click 'enable GPU' upgrade (swaps the bundled
+    CPU PyTorch for the matching CUDA build)."""
+    name = _nvidia_name()
+    try:
+        import torch
+        enabled = bool(torch.cuda.is_available())
+    except Exception:
+        enabled = False
+    return {"has_nvidia": bool(name), "gpu_name": name, "cuda_enabled": enabled}
+
+
 @app.post("/api/jobs")
 def create_job(body: CreateJob):
     url = body.url.strip()

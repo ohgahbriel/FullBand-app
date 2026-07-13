@@ -90,6 +90,48 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mbtn.rec.recording .rec-dot { background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.8); animation: recpulse 1s ease-in-out infinite; }
 @keyframes recpulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 
+/* Enable-GPU button (desktop app, shown only when an NVIDIA GPU is idle) */
+.gpu-btn {
+  color: #241303; border-color: #c07d1f;
+  background: linear-gradient(180deg, var(--amber-hi), var(--amber));
+  font-weight: 700;
+}
+.gpu-btn:hover { filter: brightness(1.06); border-color: #c07d1f; }
+.gpu-btn[hidden] { display: none; }
+
+/* GPU-install progress overlay */
+.gpu-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(10, 10, 10, .82); backdrop-filter: blur(4px);
+}
+.gpu-overlay[hidden] { display: none; }
+.gpu-card {
+  width: min(560px, 92vw); padding: 30px 28px; border-radius: 14px;
+  background: var(--panel); border: 1px solid var(--line-2);
+  box-shadow: 0 24px 70px rgba(0,0,0,.6); text-align: center;
+}
+.gpu-spin {
+  width: 40px; height: 40px; margin: 0 auto 18px; border-radius: 50%;
+  border: 3px solid var(--line-2); border-top-color: var(--amber);
+  animation: gpuspin .8s linear infinite;
+}
+@keyframes gpuspin { to { transform: rotate(360deg); } }
+.gpu-title { font-size: 18px; font-weight: 700; color: #fff; }
+.gpu-sub { margin-top: 10px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.gpu-log {
+  margin: 16px 0 0; max-height: 180px; overflow-y: auto; text-align: left;
+  font-family: var(--mono); font-size: 11px; line-height: 1.5; color: var(--dim);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.gpu-close {
+  margin-top: 16px; height: 34px; padding: 0 18px; border-radius: 6px;
+  font-weight: 600; font-size: 13px; color: var(--text);
+  background: linear-gradient(180deg, var(--raise), var(--panel-2)); border: 1px solid var(--line-2);
+}
+.gpu-close:hover { border-color: var(--amber); color: var(--amber-hi); }
+
 /* the Open dropdown */
 .menu-wrap { position: relative; }
 .menu-pop {
