@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -181,35 +182,71 @@ def _split_guitar(stem_dir: Path, ext: str) -> None:
         print(f"[guitar-split] skipped: {exc}", file=sys.stderr)
 
 
-def separate(job: Job, source: Path) -> None:
-    """Run Demucs; populate job.stems with served file paths."""
-    job.status = "separating"
-    job.progress = 0.0
-    device = _resolve_device()
-
-    cmd = [
-        sys.executable, "-m", "demucs",
-        "-n", job.model,
-        "-d", device,
-        "--segment", str(config.SEGMENT),
-        "-o", str(job.dir() / "stems"),
-    ]
-    if config.OUTPUT_FORMAT == "mp3":
-        cmd += ["--mp3", "--mp3-bitrate", str(config.MP3_BITRATE)]
-    cmd.append(str(source))
-
+def _run_demucs(job: Job, cmd: list[str]) -> tuple[int, str]:
+    """Run one demucs invocation, updating job.progress; return (code, output tail)."""
     proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1,
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
     )
+    tail = deque(maxlen=30)
     pct = re.compile(r"(\d+)%")
     for line in proc.stdout:                 # type: ignore[union-attr]
+        tail.append(line)
         m = pct.search(line)
         if m:
             job.progress = int(m.group(1)) / 100.0
     proc.wait()
-    if proc.returncode != 0:
-        raise RuntimeError("demucs separation failed (out of VRAM? lower FULLBAND_SEGMENT)")
+    return proc.returncode, "".join(tail)
+
+
+def separate(job: Job, source: Path) -> None:
+    """Run Demucs; populate job.stems with served file paths.
+
+    Resilient for testers on small GPUs: if a CUDA run runs out of memory, retry
+    at smaller segment sizes, then fall back to CPU (slow but always works).
+    """
+    job.status = "separating"
+    job.progress = 0.0
+    device = _resolve_device()
+    out_dir = str(job.dir() / "stems")
+
+    # Attempt ladder. On CUDA OOM: shrink the segment, then drop to CPU.
+    attempts: list[tuple[str, int]] = [(device, config.SEGMENT)]
+    if device == "cuda":
+        for seg in (5, 3):
+            if seg < config.SEGMENT:
+                attempts.append(("cuda", seg))
+        attempts.append(("cpu", 7))          # CPU has plenty of RAM
+
+    last_out = ""
+    ok = False
+    for i, (dev, seg) in enumerate(attempts):
+        if i:
+            job.progress = 0.0
+            print(f"[separate] retrying on device={dev} segment={seg} "
+                  f"(previous attempt failed)", file=sys.stderr)
+        cmd = [
+            sys.executable, "-m", "demucs",
+            "-n", job.model, "-d", dev, "--segment", str(seg), "-o", out_dir,
+        ]
+        if config.OUTPUT_FORMAT == "mp3":
+            cmd += ["--mp3", "--mp3-bitrate", str(config.MP3_BITRATE)]
+        cmd.append(str(source))
+
+        code, last_out = _run_demucs(job, cmd)
+        if code == 0:
+            ok = True
+            break
+        oom = any(k in last_out.lower()
+                  for k in ("out of memory", "cuda out of memory", "outofmemory"))
+        # A non-memory failure won't be fixed by a smaller segment or CPU — stop.
+        if not oom and dev != "cpu":
+            break
+
+    if not ok:
+        print(f"[separate] all attempts failed:\n{last_out}", file=sys.stderr)
+        hint = ("out of GPU memory — try FULLBAND_DEVICE=cpu"
+                if "memory" in last_out.lower() else "see the backend log")
+        raise RuntimeError(f"demucs separation failed ({hint})")
 
     # Demucs writes to <out>/<model>/<source-stem>/<stem>.<ext>
     ext = config.OUTPUT_FORMAT
