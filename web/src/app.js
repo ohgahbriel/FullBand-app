@@ -1,6 +1,7 @@
 // UI glue for the DAW view: talk to the backend, drive the Mixer, build track
 // lanes, paint per-stem waveforms + a sweeping playhead.
 import { Mixer } from "./mixer.js";
+import { guitarDiagramSVG, pianoDiagramSVG } from "./chordDiagrams.js";
 
 const DEFAULT_BACKEND =
   location.protocol.startsWith("http") ? location.origin : "http://localhost:8000";
@@ -38,7 +39,10 @@ let currentJob = null;
 let beats = [];          // beat times (s) in the CURRENT timeline (tempo-scaled)
 let lastBeat = -1;
 let chords = [];
+let sections = [];
 let lyrics = [];
+let chartOpen = localStorage.getItem("fullband.chordChart") === "1";
+let lastChordChartIdx = -2;
 
 // transpose + tempo
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -209,6 +213,7 @@ async function loadStems(job) {
   origBpm = job.bpm || 0;
   origKey = job.key || "";
   chords = job.chords || [];
+  sections = job.sections || [];
   lyrics = job.lyrics || [];
   semitones = 0; tempoMult = 1.0; appliedTempo = 1.0;
   beats = origBeats;
@@ -832,6 +837,7 @@ function updateShiftDisplays() {
   keyEl.classList.toggle("shifted", semitones !== 0);
   bpmEl.textContent = origBpm ? Math.round(origBpm * tempoMult) : "—";
   bpmEl.classList.toggle("shifted", Math.abs(tempoMult - 1) > 1e-3);
+  relabelChordChart();
   if (stageActive) {
     $("st-key").textContent = shiftKeyName(origKey, semitones);
     $("st-bpm").textContent = bpmEl.textContent;
@@ -881,6 +887,11 @@ mixer.onended = () => {
 
 // ruler click to seek
 $("ruler").addEventListener("pointerdown", (e) => seekFromEvent(e));
+$("ruler").addEventListener("mousemove", (e) => {
+  const s = sectionAtX(e.clientX);
+  $("ruler").title = s ? s.label : "";
+  $("ruler").style.cursor = s ? "pointer" : "";
+});
 
 function tick() {
   const t = mixer.currentTime();
@@ -938,6 +949,7 @@ function setupViz(job) {
   $("chordNow").textContent = "—";
   $("lyricNow").textContent = lyrics.length ? "" : "(no lyrics found)";
   ["chordPrev", "chordNext1", "chordNext2", "lyricPrev", "lyricNext"].forEach((id) => ($(id).textContent = ""));
+  buildChordChart();
   updateViz(mixer.currentTime());
 }
 function lastIdx(arr, t) {
@@ -968,7 +980,105 @@ function updateViz(t) {
     $("lyricNow").textContent = li >= 0 ? lyrics[li].text : (lyrics[0] ? "♪ " + lyrics[0].text : "");
     $("lyricNext").textContent = lyrics[li + 1] ? lyrics[li + 1].text : "";
   }
+  highlightChordChart(tOrig);
 }
+
+// --- full-song chord chart --------------------------------------------------
+function buildChordChart() {
+  const wrap = $("chordChart");
+  wrap.innerHTML = "";
+  lastChordChartIdx = -2;
+  closeChordDiagram();
+  if (!chords.length) {
+    wrap.innerHTML = `<span class="chord-chart-empty">No chords detected for this song</span>`;
+    return;
+  }
+  chords.forEach((c, i) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chord-chip";
+    chip.textContent = chordText(c);
+    chip.title = fmt(c.time) + " — right-click for more";
+    chip.addEventListener("click", () => {
+      jumpToChord(c.time);
+      toggleChordDiagram(chip);
+    });
+    chip.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      showMenu(e.clientX, e.clientY, [
+        { label: "Play from here", action: () => { jumpToChord(c.time); if (!mixer.playing) startPlayback(); } },
+        { label: "Show chord diagram", action: () => toggleChordDiagram(chip) },
+        { label: "Loop this chord", action: () => loopChord(i) },
+      ]);
+    });
+    wrap.appendChild(chip);
+  });
+}
+function loopChord(i) {
+  if (!chords.length || i < 0 || i >= chords.length) return;
+  loopA = chords[i].time;
+  loopB = i + 1 < chords.length ? chords[i + 1].time : mixer.duration * appliedTempo;
+  $("loopBtn").classList.remove("armed"); $("loopBtn").classList.add("on");
+  drawLoop();
+}
+
+// --- chord diagram popover (fretboard + piano, on chip click) --------------
+let diagramChip = null;
+function toggleChordDiagram(chip) {
+  const pop = $("chordDiagramPop");
+  if (diagramChip === chip) { closeChordDiagram(); return; }
+  const label = chip.textContent;
+  const gtr = guitarDiagramSVG(label);
+  const pno = pianoDiagramSVG(label);
+  pop.innerHTML = (!gtr && !pno)
+    ? `<div class="diagram-empty">No chord</div>`
+    : `<div class="diagram-title">${label}</div><div class="diagram-row">${gtr}${pno}</div>`;
+  const r = chip.getBoundingClientRect();
+  pop.style.left = `${Math.max(4, r.left)}px`;
+  pop.style.top = `${r.bottom + 6}px`;
+  pop.hidden = false;
+  diagramChip = chip;
+}
+function closeChordDiagram() {
+  $("chordDiagramPop").hidden = true;
+  diagramChip = null;
+}
+document.addEventListener("pointerdown", (e) => {
+  if (diagramChip && !e.target.closest(".chord-chip") && !e.target.closest("#chordDiagramPop")) closeChordDiagram();
+}, true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && diagramChip) closeChordDiagram(); });
+function relabelChordChart() {
+  const chips = $("chordChart").querySelectorAll(".chord-chip");
+  chips.forEach((el, i) => { if (chords[i]) el.textContent = chordText(chords[i]); });
+  closeChordDiagram();
+}
+function jumpToChord(tOrigSeconds) {
+  mixer.seek(tOrigSeconds / appliedTempo);
+  lastBeat = beatIndexAt(mixer.currentTime());
+  updateClock();
+  updatePlayhead(mixer.duration ? mixer.currentTime() / mixer.duration : 0);
+  updateViz(mixer.currentTime());
+}
+function highlightChordChart(tOrig) {
+  if (!chords.length) return;
+  const ci = lastIdx(chords, tOrig);
+  if (ci === lastChordChartIdx) return;
+  const chips = $("chordChart").children;
+  if (lastChordChartIdx >= 0 && chips[lastChordChartIdx]) chips[lastChordChartIdx].classList.remove("now");
+  if (ci >= 0 && chips[ci]) {
+    chips[ci].classList.add("now");
+    if (chartOpen) chips[ci].scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }
+  lastChordChartIdx = ci;
+}
+function setChartOpen(open) {
+  chartOpen = open;
+  $("chordChart").hidden = !open;
+  $("chordChartBtn").classList.toggle("on", open);
+  localStorage.setItem("fullband.chordChart", open ? "1" : "0");
+}
+$("chordChartBtn").addEventListener("click", () => setChartOpen(!chartOpen));
+setChartOpen(chartOpen);
 
 function updateMeters() {
   for (const t of mixer.tracks) {
@@ -1105,6 +1215,30 @@ function drawRuler() {
     const xm = Math.round((t + interval / 2) * pxPerSec) + 0.5;
     if (xm < w) { ctx.fillStyle = "#333"; ctx.fillRect(xm, h * 0.55, 1, h * 0.45); }
   }
+  // structural waypoints (section boundaries) — small blue flags along the bottom
+  for (const s of sections) {
+    const x = (s.time / appliedTempo) * pxPerSec;
+    if (x < 0 || x > w) continue;
+    ctx.beginPath();
+    ctx.moveTo(x, h);
+    ctx.lineTo(x - 4, h - 7);
+    ctx.lineTo(x + 4, h - 7);
+    ctx.closePath();
+    ctx.fillStyle = "#4a9eff";
+    ctx.fill();
+  }
+}
+function sectionAtX(clientX) {
+  const c = $("ruler");
+  const r = c.getBoundingClientRect();
+  const dur = mixer.duration || 1;
+  const pxPerSec = r.width / dur;
+  const x = clientX - r.left;
+  for (const s of sections) {
+    const sx = (s.time / appliedTempo) * pxPerSec;
+    if (Math.abs(sx - x) <= 6) return s;
+  }
+  return null;
 }
 
 let resizeTimer = null;

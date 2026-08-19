@@ -29,6 +29,7 @@ class Job:
     key: str = ""                   # detected key, e.g. "C maj", "" if unknown
     beats: list[float] = field(default_factory=list)  # beat times, seconds
     chords: list[dict] = field(default_factory=list)  # [{time, label}] per beat
+    sections: list[dict] = field(default_factory=list)  # [{time, label}] structural waypoints
     lyrics: list[dict] = field(default_factory=list)  # [{time, text}] synced lines
     lyrics_source: str = ""         # "captions" | "whisper" | ""
     stems: list[dict] = field(default_factory=list)  # [{name, url}]
@@ -43,7 +44,8 @@ class Job:
         data = {
             "id": self.id, "url": self.url, "model": self.model,
             "title": self.title, "bpm": self.bpm, "key": self.key,
-            "beats": self.beats, "chords": self.chords, "lyrics": self.lyrics,
+            "beats": self.beats, "chords": self.chords, "sections": self.sections,
+            "lyrics": self.lyrics,
             "lyrics_source": self.lyrics_source, "stems": self.stems,
             "created": self.created,
         }
@@ -64,6 +66,7 @@ class Job:
                 job.key = d.get("key", "")
                 job.beats = d.get("beats", [])
                 job.chords = d.get("chords", [])
+                job.sections = d.get("sections", [])
                 job.lyrics = d.get("lyrics", [])
                 job.lyrics_source = d.get("lyrics_source", "")
                 job.stems = d.get("stems", [])
@@ -336,6 +339,47 @@ def _estimate_chords(y, sr, beat_times) -> list[dict]:
     return out
 
 
+def _estimate_sections(y, sr, beat_times) -> list[dict]:
+    """Structural waypoints: beat-synchronous chroma, agglomeratively cut into
+    a handful of contiguous segments (`librosa.segment.agglomerative`).
+
+    Deliberately generic ("Section 2", "Section 3", ...) rather than semantic
+    (Verse/Chorus): unsupervised segmentation can find where the harmonic
+    content shifts, but not reliably what to call each side of the boundary.
+    These are navigation waypoints, not a claimed song structure.
+    """
+    import numpy as np
+    import librosa
+
+    bt = np.asarray(beat_times, dtype=float)
+    if len(bt) < 16:
+        return []
+    chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+    beat_frames = librosa.time_to_frames(bt, sr=sr)
+    beat_frames = beat_frames[beat_frames < chroma.shape[1]]
+    if len(beat_frames) < 16:
+        return []
+    beat_chroma = librosa.util.sync(chroma, beat_frames, aggregate=np.median)
+    n = beat_chroma.shape[1]
+    k = max(2, min(8, n // 16))  # roughly one waypoint per ~16 beats, capped
+    if k < 2:
+        return []
+    bounds = librosa.segment.agglomerative(beat_chroma, k)
+    bt_synced = bt[: len(beat_frames)]
+    min_gap = 12.0  # seconds; drop boundaries too close together to be useful waypoints
+    out = []
+    last_t = -min_gap
+    for b in bounds:
+        if b <= 0 or b >= len(bt_synced):  # skip the always-present t=0 boundary
+            continue
+        t = float(bt_synced[b])
+        if t - last_t < min_gap:
+            continue
+        out.append({"time": round(t, 3), "label": f"Section {len(out) + 2}"})
+        last_t = t
+    return out
+
+
 def analyze(job: Job, source: Path) -> None:
     """Detect BPM + key and render a beat-aligned click track.
 
@@ -357,6 +401,7 @@ def analyze(job: Job, source: Path) -> None:
         job.beats = [round(float(t), 3) for t in beat_times]
         job.key = _estimate_key(y, sr)
         job.chords = _estimate_chords(y, sr, beat_times)
+        job.sections = _estimate_sections(y, sr, beat_times)
 
         # Full-length click track at a clean 44.1 kHz, encoded like the stems.
         out_sr = 44100
