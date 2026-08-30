@@ -31,7 +31,7 @@ class Job:
     chords: list[dict] = field(default_factory=list)  # [{time, label}] per beat
     sections: list[dict] = field(default_factory=list)  # [{time, label}] structural waypoints
     lyrics: list[dict] = field(default_factory=list)  # [{time, text}] synced lines
-    lyrics_source: str = ""         # "captions" | "whisper" | ""
+    lyrics_source: str = ""         # "captions" | "whisper" | "manual" | ""
     stems: list[dict] = field(default_factory=list)  # [{name, url}]
     error: str = ""
     created: float = field(default_factory=time.time)  # epoch seconds

@@ -1,6 +1,6 @@
 {
   "name": "fullband-desktop",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "description": "FullBand desktop app — self-contained: bundles the Python engine, ffmpeg and the UI.",
   "author": "ohgahbriel",

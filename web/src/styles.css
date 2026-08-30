@@ -341,7 +341,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ----- chord diagram popover (fretboard + piano, on chip click) ----- */
 .chord-diagram-pop {
-  position: fixed; z-index: 40; background: var(--panel-2); border: 1px solid var(--line-2);
+  position: fixed; z-index: 150; background: var(--panel-2); border: 1px solid var(--line-2);
   border-radius: 8px; padding: 10px 12px; box-shadow: 0 10px 28px rgba(0,0,0,.55);
 }
 .diagram-title { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--amber-hi); margin-bottom: 6px; text-align: center; }
@@ -599,6 +599,52 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .st-btn-play:hover { filter: brightness(1.07); color: #241303; }
 .st-btn-play.playing { border-color: var(--amber); }
+
+.st-top-btn.on {
+  color: #241303; border-color: #c07d1f;
+  background: linear-gradient(180deg, var(--amber-hi), var(--amber));
+}
+
+/* ----- Stage Mode songbook (chords + lyrics, big-format for performing) --- */
+.st-songbook {
+  width: min(720px, 90vw); max-height: 34vh; overflow-y: auto;
+  padding: 10px 18px; margin: 0 auto;
+  background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 10px;
+}
+.st-songbook:empty { display: none; }
+.st-songbook .songbook-text { font-size: 18px; }
+.st-songbook .chord-chip { font-size: 15px; padding: 5px 12px; cursor: default; }
+.st-songbook .chord-chart-empty { font-size: 14px; }
+
+/* ----- Stage Mode chord+lyrics editor (paste + tap-sync) ------------------ */
+.st-editor {
+  width: min(720px, 90vw); margin: 0 auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 18px;
+}
+.st-editor-hint { font-size: 13px; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
+.st-sheet-input {
+  width: 100%; height: 160px; resize: vertical;
+  font-family: var(--mono); font-size: 13px; line-height: 1.5; white-space: pre;
+  background: var(--bg-2); color: var(--text); border: 1px solid var(--line-2);
+  border-radius: 6px; padding: 10px 12px;
+}
+.st-editor-actions { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.st-editor-actions .st-top-btn { height: 36px; padding: 0 16px; font-size: 14px; }
+.st-sheet-preview, .st-sync-current, .st-sync-next {
+  margin-top: 10px; max-height: 24vh; overflow-y: auto;
+}
+.st-sync-progress { font-family: var(--mono); font-size: 12px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+.st-sync-current { font-size: 20px; }
+.st-sync-current .songbook-text { font-size: 22px; font-weight: 700; color: var(--text); }
+.st-sync-current .chord-chip { font-size: 18px; padding: 6px 14px; }
+.st-sync-next { opacity: .55; }
+.st-sync-tap {
+  color: #241303; border-color: #c07d1f;
+  background: linear-gradient(180deg, var(--amber-hi), var(--amber));
+  font-size: 16px; font-weight: 700;
+}
+.st-editor-actions .st-top-btn:disabled { opacity: .4; cursor: default; }
 
 .st-footer {
   display: flex; align-items: center; justify-content: space-between;

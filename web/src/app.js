@@ -2,6 +2,7 @@
 // lanes, paint per-stem waveforms + a sweeping playhead.
 import { Mixer } from "./mixer.js";
 import { guitarDiagramSVG, pianoDiagramSVG } from "./chordDiagrams.js";
+import { parseChordSheet } from "./chordSheet.js";
 
 const DEFAULT_BACKEND =
   location.protocol.startsWith("http") ? location.origin : "http://localhost:8000";
@@ -951,9 +952,12 @@ window.addEventListener("keydown", (e) => {
 function setupViz(job) {
   const badge = $("vizBadge");
   if (job.lyrics_source) {
-    badge.textContent = job.lyrics_source === "whisper" ? "WHISPER" : "CAPTIONS";
+    const LABELS = { whisper: "WHISPER", manual: "IMPORTED" };
+    badge.textContent = LABELS[job.lyrics_source] || "CAPTIONS";
     badge.hidden = false;
   } else badge.hidden = true;
+  setEditMode(false);
+  cancelSheetEditing();
   $("chordNow").textContent = "—";
   $("lyricNow").textContent = lyrics.length ? "" : "(no lyrics found)";
   ["chordPrev", "chordNext1", "chordNext2", "lyricPrev", "lyricNext"].forEach((id) => ($(id).textContent = ""));
@@ -1013,12 +1017,12 @@ function makeChordChip(c, i) {
   });
   return chip;
 }
-function buildChordChart() {
-  const wrap = $("chordChart");
+// Renders the merged songbook (or the plain chord-chip strip, when there are
+// no lyrics) into one container. Called twice — once for the small "Chords"
+// panel, once for the big Stage Mode view — so both always show the same
+// state; see buildChordChart().
+function renderSongbookInto(wrap) {
   wrap.innerHTML = "";
-  lastChordChartIdx = -2;
-  lastSongbookLineIdx = -2;
-  closeChordDiagram();
   const songbookMode = lyrics.length > 0;
   wrap.classList.toggle("songbook-mode", songbookMode);
   if (!chords.length && !lyrics.length) {
@@ -1031,9 +1035,11 @@ function buildChordChart() {
   }
   // Songbook view: each chord is bucketed under the lyric line it starts
   // within (by timestamp) and shown as a chip row above that line's text —
-  // the classic chord-over-lyrics layout. Neither source has word-level
-  // timing, so a chord is placed at the start of its line, not over a
-  // specific word; a line with no new chord just continues the previous one.
+  // the classic chord-over-lyrics layout. Auto-detected chords/lyrics have
+  // no word-level timing, so a chord is placed at the start of its line, not
+  // over a specific word; a line with no new chord just continues the
+  // previous one. (An imported/tap-synced sheet carries real per-chord times
+  // from finishTapSync(), so this still buckets correctly for those too.)
   const buckets = new Map();
   chords.forEach((c, ci) => {
     const li = lastIdx(lyrics, c.time);
@@ -1059,6 +1065,13 @@ function buildChordChart() {
   };
   if (buckets.has(-1)) wrap.appendChild(makeRow(-1, null));
   lyrics.forEach((ln, li) => wrap.appendChild(makeRow(li, ln.text)));
+}
+function buildChordChart() {
+  lastChordChartIdx = -2;
+  lastSongbookLineIdx = -2;
+  closeChordDiagram();
+  renderSongbookInto($("chordChart"));
+  renderSongbookInto($("st-songbook"));
 }
 function loopChord(i) {
   if (!chords.length || i < 0 || i >= chords.length) return;
@@ -1094,8 +1107,9 @@ document.addEventListener("pointerdown", (e) => {
 }, true);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && diagramChip) closeChordDiagram(); });
 function relabelChordChart() {
-  const chips = $("chordChart").querySelectorAll(".chord-chip");
-  chips.forEach((el, i) => { if (chords[i]) el.textContent = chordText(chords[i]); });
+  [$("chordChart"), $("st-songbook")].forEach((wrap) => {
+    wrap.querySelectorAll(".chord-chip").forEach((el, i) => { if (chords[i]) el.textContent = chordText(chords[i]); });
+  });
   closeChordDiagram();
 }
 function jumpToChord(tOrigSeconds) {
@@ -1106,28 +1120,36 @@ function jumpToChord(tOrigSeconds) {
   updateViz(mixer.currentTime());
 }
 function highlightChordChart(tOrig) {
-  const wrap = $("chordChart");
+  const wraps = [$("chordChart"), $("st-songbook")];
   if (chords.length) {
     const ci = lastIdx(chords, tOrig);
     if (ci !== lastChordChartIdx) {
-      if (lastChordChartIdx >= 0) wrap.querySelector(`[data-chord-idx="${lastChordChartIdx}"]`)?.classList.remove("now");
-      const cur = ci >= 0 ? wrap.querySelector(`[data-chord-idx="${ci}"]`) : null;
-      if (cur) {
-        cur.classList.add("now");
-        if (chartOpen && !lyrics.length) cur.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-      }
+      wraps.forEach((wrap) => {
+        if (lastChordChartIdx >= 0) wrap.querySelector(`[data-chord-idx="${lastChordChartIdx}"]`)?.classList.remove("now");
+        const cur = ci >= 0 ? wrap.querySelector(`[data-chord-idx="${ci}"]`) : null;
+        if (cur) {
+          cur.classList.add("now");
+          if (wrap === $("chordChart") ? chartOpen && !lyrics.length : true) {
+            cur.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+          }
+        }
+      });
       lastChordChartIdx = ci;
     }
   }
   if (lyrics.length) {
     const li = lastIdx(lyrics, tOrig);
     if (li !== lastSongbookLineIdx) {
-      if (lastSongbookLineIdx >= 0) wrap.querySelector(`[data-line-idx="${lastSongbookLineIdx}"]`)?.classList.remove("now");
-      const cur = li >= 0 ? wrap.querySelector(`[data-line-idx="${li}"]`) : null;
-      if (cur) {
-        cur.classList.add("now");
-        if (chartOpen) cur.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-      }
+      wraps.forEach((wrap) => {
+        if (lastSongbookLineIdx >= 0) wrap.querySelector(`[data-line-idx="${lastSongbookLineIdx}"]`)?.classList.remove("now");
+        const cur = li >= 0 ? wrap.querySelector(`[data-line-idx="${li}"]`) : null;
+        if (cur) {
+          cur.classList.add("now");
+          if (wrap === $("chordChart") ? chartOpen : true) {
+            cur.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+          }
+        }
+      });
       lastSongbookLineIdx = li;
     }
   }
@@ -1469,6 +1491,137 @@ $("st-bar").addEventListener("pointerdown", (e) => {
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   mixer.seek(ratio * mixer.duration);
 });
+
+// --- chord+lyrics import (Stage Mode "Edit") -------------------------------
+// Lets the user paste a chord+lyrics sheet they already have rights to view
+// (e.g. copied from CifraClub or Ultimate Guitar) and tap-sync it to the
+// track, replacing the auto-detected chords/lyrics with hand-verified ones.
+// FullBand never fetches this content itself — see chordSheet.js.
+let editMode = false;
+let sheetRows = null;    // parsed rows, once "Parse" succeeds
+let syncRows = null;     // the rows actually being tap-synced
+let syncTimes = [];      // captured mixer times (original/untempo'd), one per tapped row
+let syncIdx = 0;
+
+function sheetRowPreviewHTML(row) {
+  const chips = row.chords.map((c) => `<span class="chord-chip">${escapeHtml(c.label)}</span>`).join("");
+  const text = row.text ? `<div class="songbook-text">${escapeHtml(row.text)}</div>` : "";
+  return `<div class="songbook-line"><div class="songbook-chips">${chips}</div>${text}</div>`;
+}
+
+function setEditMode(on) {
+  editMode = on;
+  $("st-editBtn").classList.toggle("on", on);
+  $("st-editor").hidden = !on;
+  if (on) showSheetPaste();
+}
+function showSheetPaste() {
+  $("st-editor-paste").hidden = false;
+  $("st-editor-sync").hidden = true;
+}
+function cancelSheetEditing() {
+  sheetRows = null;
+  syncRows = null;
+  syncTimes = [];
+  syncIdx = 0;
+  $("st-sheetPreview").innerHTML = "";
+  $("st-sheetSync").hidden = true;
+  showSheetPaste();
+}
+
+$("st-editBtn").addEventListener("click", () => setEditMode(!editMode));
+$("st-sheetCancel").addEventListener("click", () => { $("st-sheetInput").value = ""; cancelSheetEditing(); });
+$("st-syncCancel").addEventListener("click", cancelSheetEditing);
+
+$("st-sheetParse").addEventListener("click", () => {
+  const rows = parseChordSheet($("st-sheetInput").value);
+  if (!rows.length) {
+    $("st-sheetPreview").innerHTML = `<span class="chord-chart-empty">Couldn't find any lyric or chord lines in that text.</span>`;
+    $("st-sheetSync").hidden = true;
+    return;
+  }
+  sheetRows = rows;
+  $("st-sheetPreview").innerHTML = rows.map(sheetRowPreviewHTML).join("");
+  $("st-sheetSync").hidden = false;
+});
+
+$("st-sheetSync").addEventListener("click", () => {
+  if (!sheetRows) return;
+  syncRows = sheetRows;
+  syncTimes = [];
+  syncIdx = 0;
+  $("st-editor-paste").hidden = true;
+  $("st-editor-sync").hidden = false;
+  if (!mixer.playing) startPlayback();
+  renderSyncStep();
+});
+
+function renderSyncStep() {
+  const atEnd = syncIdx >= syncRows.length;
+  $("st-syncProgress").textContent = atEnd
+    ? `All ${syncRows.length} lines tapped`
+    : `Line ${syncIdx + 1} of ${syncRows.length}`;
+  $("st-syncCurrent").innerHTML = atEnd ? "" : sheetRowPreviewHTML(syncRows[syncIdx]);
+  $("st-syncNext").innerHTML = !atEnd && syncIdx + 1 < syncRows.length ? sheetRowPreviewHTML(syncRows[syncIdx + 1]) : "";
+  $("st-syncUndo").disabled = syncTimes.length === 0;
+  $("st-syncTap").disabled = atEnd;
+}
+function tapSync() {
+  if (syncIdx >= syncRows.length) return;
+  syncTimes.push(mixer.currentTime() * appliedTempo);
+  syncIdx++;
+  renderSyncStep();
+}
+function undoTapSync() {
+  if (!syncTimes.length) return;
+  syncTimes.pop();
+  syncIdx--;
+  renderSyncStep();
+}
+$("st-syncTap").addEventListener("click", () => { tapSync(); $("st-syncTap").blur(); });
+$("st-syncUndo").addEventListener("click", undoTapSync);
+$("st-syncFinish").addEventListener("click", finishTapSync);
+
+async function finishTapSync() {
+  const n = syncTimes.length;
+  if (!n) { cancelSheetEditing(); return; }
+  const rows = syncRows.slice(0, n);
+  const newChords = [];
+  const newLyrics = [];
+  rows.forEach((row, i) => {
+    const tStart = syncTimes[i];
+    const tEnd = i + 1 < n ? syncTimes[i + 1] : mixer.duration * appliedTempo;
+    const len = row.text.length;
+    row.chords.forEach((c) => {
+      const frac = len ? Math.min(c.col / len, 0.98) : 0;
+      newChords.push({ time: Math.round((tStart + frac * (tEnd - tStart)) * 1000) / 1000, label: c.label });
+    });
+    newLyrics.push({ time: Math.round(tStart * 1000) / 1000, text: row.text });
+  });
+  newChords.sort((a, b) => a.time - b.time);
+
+  chords = newChords;
+  lyrics = newLyrics;
+  if (currentJob) currentJob.lyrics_source = "manual";
+  $("vizBadge").textContent = "IMPORTED";
+  $("vizBadge").hidden = false;
+  buildChordChart();
+  updateViz(mixer.currentTime());
+  setEditMode(false);
+  cancelSheetEditing();
+
+  if (currentJob) {
+    try {
+      await fetch(`${BACKEND}/api/jobs/${currentJob.id}/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chords: newChords, lyrics: newLyrics }),
+      });
+    } catch (err) {
+      setStatus(`Imported, but saving to disk failed: ${err.message}`, true);
+    }
+  }
+}
 
 // --- GPU acceleration (desktop app only; browser/dev uses setup.ps1's torch) ---
 async function initGpu() {

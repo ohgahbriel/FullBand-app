@@ -167,12 +167,47 @@
     <section id="stage" class="stage-mode" hidden>
       <div class="st-top">
         <button id="st-toggle" class="st-top-btn">≡ Songs</button>
+        <button id="st-editBtn" class="st-top-btn">✎ Edit</button>
         <button id="st-exit" class="st-top-btn">✕ Exit</button>
       </div>
 
       <div class="st-body">
         <div id="st-title" class="st-title">—</div>
         <div id="st-meta" class="st-meta">—</div>
+
+        <!-- Import a pasted chord+lyrics sheet (e.g. copied from CifraClub /
+             Ultimate Guitar) and tap-sync it to the track. Toggled by "Edit". -->
+        <div id="st-editor" class="st-editor" hidden>
+          <div id="st-editor-paste" class="st-editor-paste">
+            <div class="st-editor-hint">
+              Paste a chord+lyrics sheet — chords on their own line, directly above
+              the words they belong to (the same plain-text format CifraClub or
+              Ultimate Guitar show). FullBand never fetches this itself; paste in
+              whatever you already have rights to view.
+            </div>
+            <textarea id="st-sheetInput" class="st-sheet-input"
+              placeholder="       C          G&#10;Never gonna give you up&#10;       Am         F&#10;Never gonna let you down"></textarea>
+            <div class="st-editor-actions">
+              <button id="st-sheetParse" class="st-top-btn">Parse</button>
+              <button id="st-sheetSync" class="st-top-btn" hidden>Start Tap-Sync ▸</button>
+              <button id="st-sheetCancel" class="st-top-btn">Cancel</button>
+            </div>
+            <div id="st-sheetPreview" class="st-sheet-preview"></div>
+          </div>
+          <div id="st-editor-sync" class="st-editor-sync" hidden>
+            <div class="st-editor-hint">Play the song, then hit <b>Tap</b> the instant each line below starts.</div>
+            <div id="st-syncProgress" class="st-sync-progress">Line 1 of 1</div>
+            <div id="st-syncCurrent" class="st-sync-current"></div>
+            <div id="st-syncNext" class="st-sync-next"></div>
+            <div class="st-editor-actions">
+              <button id="st-syncUndo" class="st-top-btn">↶ Undo</button>
+              <button id="st-syncTap" class="st-top-btn st-sync-tap">TAP ▸</button>
+              <button id="st-syncFinish" class="st-top-btn">Finish &amp; Save</button>
+              <button id="st-syncCancel" class="st-top-btn">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div id="st-songbook" class="st-songbook"></div>
 
         <div id="st-bar" class="st-bar-wrap">
           <canvas id="st-wave" class="st-wave"></canvas>

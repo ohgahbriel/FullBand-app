@@ -4,6 +4,7 @@ Endpoints
   POST   /api/jobs            {url, model?}      -> {id} (reuses a finished job for the same url)
   GET    /api/jobs                               -> library: every finished/running job
   GET    /api/jobs/{id}                          -> Job status (+ stem urls when done)
+  POST   /api/jobs/{id}/import  {chords,lyrics}  -> replace with a hand-synced import
   DELETE /api/jobs/{id}                          -> remove a song from the library
   GET    /api/files/{id}/{f}                     -> a separated stem file
   GET    /api/health                             -> {device, model}
@@ -52,6 +53,11 @@ for _dir in sorted(config.DATA_DIR.iterdir() if config.DATA_DIR.is_dir() else []
 class CreateJob(BaseModel):
     url: str
     model: str | None = None
+
+
+class ImportChordsLyrics(BaseModel):
+    chords: list[dict]
+    lyrics: list[dict]
 
 
 @app.get("/api/health")
@@ -113,6 +119,20 @@ def list_jobs():
          "bpm": j.bpm, "key": j.key, "stems": len(j.stems), "created": j.created}
         for j in jobs if j.status != "error"
     ]}
+
+
+@app.post("/api/jobs/{job_id}/import")
+def import_chords_lyrics(job_id: str, body: ImportChordsLyrics):
+    """Replace a job's chords/lyrics with a hand-synced import (see the Stage
+    Mode "Edit" panel) and persist it, so it survives a reload or restart."""
+    job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "no such job")
+    job.chords = body.chords
+    job.lyrics = body.lyrics
+    job.lyrics_source = "manual"
+    job.save()
+    return {"ok": True}
 
 
 @app.delete("/api/jobs/{job_id}")
