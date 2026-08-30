@@ -1,0 +1,99 @@
+name: Build Windows Installer
+
+# Builds the fully self-contained FullBand Windows installer in the cloud —
+# assembles a portable Python 3.12 + CPU PyTorch/Demucs runtime and a static
+# ffmpeg build, then packages everything with electron-builder — so no local
+# machine has to build or upload the ~400MB exe by hand.
+#
+# Run on demand from the Actions tab (download the exe from the run's
+# artifacts), or push a version tag to also publish it to a GitHub Release
+# with a stable download link.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.12.7"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install portable Python runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Invoke-WebRequest "https://www.python.org/ftp/python/$env:PYTHON_VERSION/python-$env:PYTHON_VERSION-amd64.exe" -OutFile python-installer.exe
+          $target = "$PWD\desktop\_bundle\python"
+          Start-Process -FilePath .\python-installer.exe -ArgumentList @(
+            "/quiet", "InstallAllUsers=0", "TargetDir=$target",
+            "Include_launcher=0", "Include_test=0", "Include_doc=0",
+            "Include_tcltk=1", "Include_pip=1", "PrependPath=0"
+          ) -Wait
+          & "$target\python.exe" -m pip install --upgrade pip
+
+      - name: Install backend dependencies (CPU PyTorch) into the runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $py = "$PWD\desktop\_bundle\python\python.exe"
+          & $py -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          & $py -m pip install -r server\requirements.txt
+
+      - name: Download static ffmpeg (gyan.dev essentials build)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_extracted
+          New-Item -ItemType Directory -Force -Path desktop\_bundle\ffmpeg | Out-Null
+          $bin = (Get-ChildItem -Path ffmpeg_extracted -Recurse -Filter ffmpeg.exe | Select-Object -First 1).DirectoryName
+          Copy-Item "$bin\*" desktop\_bundle\ffmpeg -Force
+
+      - name: Build web frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build the Windows installer
+        working-directory: desktop
+        run: |
+          npm ci
+          npm run dist
+
+      - name: Read app version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Get-Content desktop\package.json | ConvertFrom-Json).version
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FullBand-Setup-${{ steps.ver.outputs.version }}
+          path: desktop/dist/FullBand Setup*.exe
+
+      - name: Publish to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.ver.outputs.version }}"
+          FILE="desktop/dist/FullBand Setup ${{ steps.ver.outputs.version }}.exe"
+          gh release create "$TAG" "$FILE" \
+            --title "FullBand $TAG" \
+            --notes "Automated Windows installer build (self-contained: Python + PyTorch + Demucs + ffmpeg + UI)." \
+            --draft=false 2>/dev/null \
+          || { gh release upload "$TAG" "$FILE" --clobber && gh release edit "$TAG" --draft=false; }
