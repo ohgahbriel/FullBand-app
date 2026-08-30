@@ -1,0 +1,5 @@
+# Keep graphify focused on our own code
+desktop/_bundle
+artifacts
+server/data
+graphify-out
