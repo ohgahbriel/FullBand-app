@@ -43,6 +43,7 @@ let sections = [];
 let lyrics = [];
 let chartOpen = localStorage.getItem("fullband.chordChart") === "1";
 let lastChordChartIdx = -2;
+let lastSongbookLineIdx = -2;
 
 // transpose + tempo
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -187,10 +188,17 @@ function pollJob(id) {
     } catch {
       return; // transient network blip; keep polling
     }
-    const phase = { downloading: "Downloading audio", separating: "Separating instruments" }[job.status];
+    const PHASES = {
+      downloading: "Downloading audio",
+      separating: "Separating instruments",
+      analyzing: "Detecting key, chords & tempo",
+      transcribing: "Transcribing lyrics",
+    };
+    const phase = PHASES[job.status];
     if (phase) {
-      setStatus(`${phase}… ${Math.round(job.progress * 100)}%`);
-      showProgress(job.progress);
+      const tracked = job.status === "downloading" || job.status === "separating";
+      setStatus(tracked ? `${phase}… ${Math.round(job.progress * 100)}%` : `${phase}…`);
+      showProgress(tracked ? job.progress : null);
     }
     if (job.status === "done") {
       clearInterval(pollTimer);
@@ -983,36 +991,74 @@ function updateViz(t) {
   highlightChordChart(tOrig);
 }
 
-// --- full-song chord chart --------------------------------------------------
+// --- full-song chord chart (a "songbook" merge when lyrics are available) --
+function makeChordChip(c, i) {
+  const chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = "chord-chip";
+  chip.textContent = chordText(c);
+  chip.title = fmt(c.time) + " — right-click for more";
+  chip.dataset.chordIdx = i;
+  chip.addEventListener("click", () => {
+    jumpToChord(c.time);
+    toggleChordDiagram(chip);
+  });
+  chip.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    showMenu(e.clientX, e.clientY, [
+      { label: "Play from here", action: () => { jumpToChord(c.time); if (!mixer.playing) startPlayback(); } },
+      { label: "Show chord diagram", action: () => toggleChordDiagram(chip) },
+      { label: "Loop this chord", action: () => loopChord(i) },
+    ]);
+  });
+  return chip;
+}
 function buildChordChart() {
   const wrap = $("chordChart");
   wrap.innerHTML = "";
   lastChordChartIdx = -2;
+  lastSongbookLineIdx = -2;
   closeChordDiagram();
-  if (!chords.length) {
-    wrap.innerHTML = `<span class="chord-chart-empty">No chords detected for this song</span>`;
+  const songbookMode = lyrics.length > 0;
+  wrap.classList.toggle("songbook-mode", songbookMode);
+  if (!chords.length && !lyrics.length) {
+    wrap.innerHTML = `<span class="chord-chart-empty">No chords or lyrics detected for this song</span>`;
     return;
   }
-  chords.forEach((c, i) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "chord-chip";
-    chip.textContent = chordText(c);
-    chip.title = fmt(c.time) + " — right-click for more";
-    chip.addEventListener("click", () => {
-      jumpToChord(c.time);
-      toggleChordDiagram(chip);
-    });
-    chip.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      showMenu(e.clientX, e.clientY, [
-        { label: "Play from here", action: () => { jumpToChord(c.time); if (!mixer.playing) startPlayback(); } },
-        { label: "Show chord diagram", action: () => toggleChordDiagram(chip) },
-        { label: "Loop this chord", action: () => loopChord(i) },
-      ]);
-    });
-    wrap.appendChild(chip);
+  if (!songbookMode) {
+    chords.forEach((c, i) => wrap.appendChild(makeChordChip(c, i)));
+    return;
+  }
+  // Songbook view: each chord is bucketed under the lyric line it starts
+  // within (by timestamp) and shown as a chip row above that line's text —
+  // the classic chord-over-lyrics layout. Neither source has word-level
+  // timing, so a chord is placed at the start of its line, not over a
+  // specific word; a line with no new chord just continues the previous one.
+  const buckets = new Map();
+  chords.forEach((c, ci) => {
+    const li = lastIdx(lyrics, c.time);
+    if (!buckets.has(li)) buckets.set(li, []);
+    buckets.get(li).push(ci);
   });
+  const makeRow = (lineIdx, text) => {
+    const row = document.createElement("div");
+    row.className = "songbook-line";
+    const chipRow = document.createElement("div");
+    chipRow.className = "songbook-chips";
+    (buckets.get(lineIdx) || []).forEach((ci) => chipRow.appendChild(makeChordChip(chords[ci], ci)));
+    row.appendChild(chipRow);
+    if (text != null) {
+      const t = document.createElement("div");
+      t.className = "songbook-text";
+      t.dataset.lineIdx = lineIdx;
+      t.textContent = text;
+      t.addEventListener("click", () => jumpToChord(lyrics[lineIdx].time));
+      row.appendChild(t);
+    }
+    return row;
+  };
+  if (buckets.has(-1)) wrap.appendChild(makeRow(-1, null));
+  lyrics.forEach((ln, li) => wrap.appendChild(makeRow(li, ln.text)));
 }
 function loopChord(i) {
   if (!chords.length || i < 0 || i >= chords.length) return;
@@ -1060,16 +1106,31 @@ function jumpToChord(tOrigSeconds) {
   updateViz(mixer.currentTime());
 }
 function highlightChordChart(tOrig) {
-  if (!chords.length) return;
-  const ci = lastIdx(chords, tOrig);
-  if (ci === lastChordChartIdx) return;
-  const chips = $("chordChart").children;
-  if (lastChordChartIdx >= 0 && chips[lastChordChartIdx]) chips[lastChordChartIdx].classList.remove("now");
-  if (ci >= 0 && chips[ci]) {
-    chips[ci].classList.add("now");
-    if (chartOpen) chips[ci].scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  const wrap = $("chordChart");
+  if (chords.length) {
+    const ci = lastIdx(chords, tOrig);
+    if (ci !== lastChordChartIdx) {
+      if (lastChordChartIdx >= 0) wrap.querySelector(`[data-chord-idx="${lastChordChartIdx}"]`)?.classList.remove("now");
+      const cur = ci >= 0 ? wrap.querySelector(`[data-chord-idx="${ci}"]`) : null;
+      if (cur) {
+        cur.classList.add("now");
+        if (chartOpen && !lyrics.length) cur.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      }
+      lastChordChartIdx = ci;
+    }
   }
-  lastChordChartIdx = ci;
+  if (lyrics.length) {
+    const li = lastIdx(lyrics, tOrig);
+    if (li !== lastSongbookLineIdx) {
+      if (lastSongbookLineIdx >= 0) wrap.querySelector(`[data-line-idx="${lastSongbookLineIdx}"]`)?.classList.remove("now");
+      const cur = li >= 0 ? wrap.querySelector(`[data-line-idx="${li}"]`) : null;
+      if (cur) {
+        cur.classList.add("now");
+        if (chartOpen) cur.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      }
+      lastSongbookLineIdx = li;
+    }
+  }
 }
 function setChartOpen(open) {
   chartOpen = open;
@@ -1260,7 +1321,9 @@ function setStatus(msg, isError = false) {
 function setBusy(b) { $("go").disabled = b; }
 function showProgress(p) {
   $("progressWrap").hidden = false;
-  $("progressBar").style.width = `${Math.round(p * 100)}%`;
+  const bar = $("progressBar");
+  bar.classList.toggle("indeterminate", p == null);
+  bar.style.width = p == null ? "100%" : `${Math.round(p * 100)}%`;
 }
 function hideProgress() { $("progressWrap").hidden = true; }
 function fmt(s) {

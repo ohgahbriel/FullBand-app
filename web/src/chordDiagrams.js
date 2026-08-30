@@ -1,17 +1,32 @@
 // Chord diagrams: guitar fretboard + one-octave piano highlight, derived
 // formulaically from two moveable barre shapes (E-shape and A-shape), with
 // open-position overrides for the handful of chords normally taught open
-// (C, D, Dm, G). Covers every major/minor label the backend can emit.
+// (C, D, Dm, G). Covers every maj/min/7/m7/sus4 label the backend can emit
+// (see pipeline.py's _estimate_chords for why sus2/dim/aug aren't in that
+// vocabulary — the short version: no honest moveable shape for sus2 either).
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 // Per-string offsets from the shape's root fret, low E to high e. null = muted.
-const E_MAJ = [0, 2, 2, 1, 0, 0];
-const E_MIN = [0, 2, 2, 0, 0, 0];
-const A_MAJ = [null, 0, 2, 2, 2, 0];
-const A_MIN = [null, 0, 2, 2, 1, 0];
+// Each is the standard open-position fingering for that quality, generalized
+// into a moveable barre shape (e.g. E7 = 0 2 0 1 0 0, barred up the neck).
+const E_SHAPES = {
+  "": [0, 2, 2, 1, 0, 0],
+  m: [0, 2, 2, 0, 0, 0],
+  7: [0, 2, 0, 1, 0, 0],
+  m7: [0, 2, 0, 0, 0, 0],
+  sus4: [0, 2, 2, 2, 0, 0],
+};
+const A_SHAPES = {
+  "": [null, 0, 2, 2, 2, 0],
+  m: [null, 0, 2, 2, 1, 0],
+  7: [null, 0, 2, 0, 2, 0],
+  m7: [null, 0, 2, 0, 1, 0],
+  sus4: [null, 0, 2, 2, 3, 0],
+};
 
 // Chords with a nicer, widely-taught open-position shape than the barre
-// formula would produce.
+// formula would produce. Only defined for maj/min — the 7/m7/sus4 barre
+// shapes above are already the standard open fingering for those roots.
 const OPEN_OVERRIDES = {
   C: [null, 3, 2, 0, 1, 0],
   D: [null, null, 0, 2, 3, 2],
@@ -25,8 +40,8 @@ function fretFrom(rootIdx, shapeIdx) {
 
 function parseLabel(label) {
   if (!label || label === "N" || label === "—") return null;
-  const m = label.match(/^([A-G]#?)(m?)$/);
-  return m ? { root: m[1], minor: !!m[2] } : null;
+  const m = label.match(/^([A-G]#?)(m7|sus4|7|m)?$/);
+  return m ? { root: m[1], quality: m[2] || "" } : null;
 }
 
 // { frets: (number|null)[6], baseFret } — baseFret is the lowest fret the
@@ -34,23 +49,30 @@ function parseLabel(label) {
 export function guitarVoicing(label) {
   const p = parseLabel(label);
   if (!p) return null;
-  const key = p.root + (p.minor ? "m" : "");
-  if (OPEN_OVERRIDES[key]) return { frets: OPEN_OVERRIDES[key], baseFret: 0 };
+  const key = p.root + p.quality;
+  if ((p.quality === "" || p.quality === "m") && OPEN_OVERRIDES[key]) {
+    return { frets: OPEN_OVERRIDES[key], baseFret: 0 };
+  }
   const rootIdx = NOTE_NAMES.indexOf(p.root);
   const fretE = fretFrom(rootIdx, NOTE_NAMES.indexOf("E"));
   const fretA = fretFrom(rootIdx, NOTE_NAMES.indexOf("A"));
   const useE = fretE <= fretA;
   const fret = useE ? fretE : fretA;
-  const shape = useE ? (p.minor ? E_MIN : E_MAJ) : (p.minor ? A_MIN : A_MAJ);
+  const shape = (useE ? E_SHAPES : A_SHAPES)[p.quality];
   return { frets: shape.map((o) => (o == null ? null : o + fret)), baseFret: fret };
 }
 
-// Root/third/fifth as 0-11 semitone classes, for a one-octave piano highlight.
+// Root/third-or-fourth/fifth(/seventh) as 0-11 semitone classes, for a
+// one-octave piano highlight.
 export function chordTones(label) {
   const p = parseLabel(label);
   if (!p) return null;
   const r = NOTE_NAMES.indexOf(p.root);
-  return { root: r, third: (r + (p.minor ? 3 : 4)) % 12, fifth: (r + 7) % 12 };
+  const minorThird = p.quality === "m" || p.quality === "m7";
+  const third = p.quality === "sus4" ? (r + 5) % 12 : (r + (minorThird ? 3 : 4)) % 12;
+  const tones = { root: r, third, fifth: (r + 7) % 12 };
+  if (p.quality === "7" || p.quality === "m7") tones.seventh = (r + 10) % 12;
+  return tones;
 }
 
 const STRING_X = [10, 26, 42, 58, 74, 90];
@@ -97,6 +119,7 @@ export function pianoDiagramSVG(label) {
   const t = chordTones(label);
   if (!t) return "";
   const on = new Set([t.root, t.third, t.fifth]);
+  if (t.seventh != null) on.add(t.seventh);
   const wKeyW = 100 / 7;
   let svg = `<svg viewBox="0 0 100 60" class="chord-piano">`;
   WHITE_OFFSETS.forEach((semi, i) => {

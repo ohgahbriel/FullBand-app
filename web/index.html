@@ -60,7 +60,7 @@
           <button id="playPause" class="tbtn play" title="Play / pause (Space)">▶</button>
           <button id="loopBtn" class="tbtn" title="A-B loop: set A, set B, then loop (L)">A–B</button>
           <button id="countBtn" class="tbtn" title="One-bar count-in before play (C)">⌗</button>
-          <button id="chordChartBtn" class="tbtn" title="Show the full chord chart for this song">Chords</button>
+          <button id="chordChartBtn" class="tbtn" title="Show the full chord chart for this song (with lyrics, when found)">Chords</button>
         </div>
         <div class="clock">
           <span id="elapsed" class="c-elapsed">0:00</span>
@@ -129,7 +129,8 @@
         </div>
       </div>
 
-      <!-- full-song chord chart (toggled by the "Chords" transport button) -->
+      <!-- full-song chord chart (toggled by the "Chords" transport button) —
+           becomes a chords-over-lyrics songbook when synced lyrics exist -->
       <div class="chord-chart" id="chordChart" hidden></div>
       <div id="chordDiagramPop" class="chord-diagram-pop" hidden></div>
 

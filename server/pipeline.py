@@ -22,7 +22,7 @@ class Job:
     id: str
     url: str
     model: str = config.MODEL
-    status: str = "queued"          # queued|downloading|separating|done|error
+    status: str = "queued"          # queued|downloading|separating|analyzing|transcribing|done|error
     progress: float = 0.0           # 0..1 within the current phase
     title: str = ""
     bpm: float = 0.0                # detected tempo, 0 if analysis failed
@@ -301,10 +301,18 @@ def _estimate_key(y, sr) -> str:
 
 
 def _estimate_chords(y, sr, beat_times) -> list[dict]:
-    """Standard (major/minor) chord per beat via chroma + triad templates.
+    """Chord per beat via chroma + triad/seventh templates.
 
-    Simplified on purpose: 24 templates (12 maj + 12 min). Consecutive identical
-    chords are collapsed so the result reads like a chord chart.
+    72 templates (12 roots x 6 qualities: maj, min, dominant 7, minor 7, and
+    sus4) plus "N" for silence. Diminished/augmented/sus2 are deliberately
+    left out: at this chroma resolution they're too easily confused with
+    plain major/minor, and sus2 also has no honest guitar-diagram shape
+    (see chordDiagrams.js), so adding it would just introduce flicker without
+    a usable diagram to back it up.
+
+    A one-beat blip surrounded by the same chord on both sides is folded into
+    its neighbors (raw per-beat argmax is noisy); consecutive identical chords
+    are then collapsed so the result reads like a chord chart.
     """
     import numpy as np
     import librosa
@@ -315,9 +323,16 @@ def _estimate_chords(y, sr, beat_times) -> list[dict]:
     chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
     times = librosa.times_like(chroma, sr=sr)
 
+    qualities = (
+        ("", [0, 4, 7]),
+        ("m", [0, 3, 7]),
+        ("7", [0, 4, 7, 10]),
+        ("m7", [0, 3, 7, 10]),
+        ("sus4", [0, 5, 7]),
+    )
     templates, labels = [], []
     for r in range(12):
-        for ivs, suffix in (([0, 4, 7], ""), ([0, 3, 7], "m")):
+        for suffix, ivs in qualities:
             t = np.zeros(12)
             for iv in ivs:
                 t[(r + iv) % 12] = 1.0
@@ -326,16 +341,24 @@ def _estimate_chords(y, sr, beat_times) -> list[dict]:
     T = np.array(templates)
 
     edges = bt + [float(times[-1]) if len(times) else bt[-1] + 1.0]
-    out = []
+    raw = []
     for i in range(len(bt)):
         mask = (times >= edges[i]) & (times < edges[i + 1])
         seg = chroma[:, mask].mean(axis=1) if mask.any() else chroma[:, np.argmin(np.abs(times - edges[i]))]
         if seg.sum() <= 1e-6:
-            label = "N"
+            raw.append("N")
         else:
-            label = labels[int(np.argmax(T @ (seg / (np.linalg.norm(seg) + 1e-9))))]
+            raw.append(labels[int(np.argmax(T @ (seg / (np.linalg.norm(seg) + 1e-9))))])
+
+    smoothed = list(raw)
+    for i in range(1, len(smoothed) - 1):
+        if smoothed[i - 1] == smoothed[i + 1] and smoothed[i] != smoothed[i - 1]:
+            smoothed[i] = smoothed[i - 1]
+
+    out = []
+    for t, label in zip(bt, smoothed):
         if not out or out[-1]["label"] != label:
-            out.append({"time": round(float(bt[i]), 3), "label": label})
+            out.append({"time": round(float(t), 3), "label": label})
     return out
 
 
@@ -503,7 +526,13 @@ def run(job: Job) -> None:
         job.dir().mkdir(parents=True, exist_ok=True)
         source = download_audio(job)
         separate(job, source)
+        # These two phases have no natural percentage (librosa analysis is a
+        # handful of quick passes; the Whisper lyrics fallback has no
+        # per-chunk hook) so progress isn't tracked within them — the UI shows
+        # a named phase instead of a frozen 100% bar.
+        job.status, job.progress = "analyzing", 0.0
         analyze(job, source)
+        job.status, job.progress = "transcribing", 0.0
         fetch_lyrics(job, source)
         job.status = "done"
         job.progress = 1.0

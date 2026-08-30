@@ -159,6 +159,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .status.error { color: var(--ember); }
 .progress-wrap { margin-top: 8px; height: 4px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
 .progress-bar { height: 100%; width: 0; transition: width .25s; background: linear-gradient(90deg, var(--amber), var(--amber-hi)); }
+.progress-bar.indeterminate {
+  background: linear-gradient(90deg, var(--panel-2) 0%, var(--amber) 50%, var(--panel-2) 100%);
+  background-size: 200% 100%;
+  animation: progress-sweep 1.4s ease-in-out infinite;
+}
+@keyframes progress-sweep {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
 .lib-head { margin: 12px 2px 4px; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); border-top: 1px solid var(--line); padding-top: 10px; }
 .lib-list { max-height: 46vh; overflow-y: auto; }
 .lib-empty { font-family: var(--mono); font-size: 12px; color: var(--dim); padding: 8px 2px; }
@@ -313,6 +322,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: linear-gradient(180deg, var(--amber-hi), var(--amber));
   box-shadow: 0 0 10px rgba(240,164,60,.4);
 }
+.chord-chart.songbook-mode {
+  display: block; max-height: 220px;
+}
+.songbook-line {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 5px 0; border-bottom: 1px solid var(--line);
+}
+.songbook-line:last-child { border-bottom: none; }
+.songbook-chips {
+  display: flex; flex-wrap: wrap; gap: 6px; min-height: 24px;
+}
+.songbook-text {
+  font-family: var(--mono); font-size: 13px; color: var(--muted); cursor: pointer; transition: color .12s;
+}
+.songbook-text:hover { color: var(--text); }
+.songbook-text.now { color: var(--text); font-weight: 600; }
 
 /* ----- chord diagram popover (fretboard + piano, on chip click) ----- */
 .chord-diagram-pop {
