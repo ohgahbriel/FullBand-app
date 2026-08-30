@@ -1,6 +1,6 @@
 {
   "name": "fullband-desktop",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "FullBand desktop app — self-contained: bundles the Python engine, ffmpeg and the UI.",
   "author": "ohgahbriel",
@@ -23,6 +23,7 @@
     "extraResources": [
       { "from": "_bundle/python", "to": "pyruntime" },
       { "from": "_bundle/ffmpeg", "to": "ffmpeg" },
+      { "from": "build/vc_redist.x64.exe", "to": "vc_redist.x64.exe" },
       { "from": "../web/dist", "to": "web" },
       {
         "from": "../server",
@@ -44,7 +45,8 @@
       "shortcutName": "FullBand",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico"
+      "installerHeaderIcon": "build/icon.ico",
+      "include": "build/installer.nsh"
     }
   }
 }

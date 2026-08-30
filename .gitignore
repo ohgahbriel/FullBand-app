@@ -16,6 +16,7 @@ desktop/node_modules/
 desktop/dist/
 desktop/backend.log
 desktop/build/_icons/
+desktop/build/vc_redist.x64.exe
 desktop/_bundle/
 desktop/runtime/
 

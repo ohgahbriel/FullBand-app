@@ -61,6 +61,12 @@ jobs:
           $bin = (Get-ChildItem -Path ffmpeg_extracted -Recurse -Filter ffmpeg.exe | Select-Object -First 1).DirectoryName
           Copy-Item "$bin\*" desktop\_bundle\ffmpeg -Force
 
+      - name: Download Microsoft Visual C++ Redistributable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Invoke-WebRequest "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile desktop\build\vc_redist.x64.exe
+
       - name: Build web frontend
         working-directory: web
         run: |
