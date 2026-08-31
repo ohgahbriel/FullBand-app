@@ -302,7 +302,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .viz-line { color: var(--dim); font-size: 13px; }
 .viz-line.now { color: var(--text); font-size: 15px; font-weight: 500; }
 .viz-badge { position: absolute; right: 12px; top: 8px; font-family: var(--mono); font-size: 9px; letter-spacing: .12em; color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; }
-.lyricPrev { display: none; }
 
 /* ----- full-song chord chart ----- */
 .chord-chart {

@@ -960,7 +960,7 @@ function setupViz(job) {
   cancelSheetEditing();
   $("chordNow").textContent = "—";
   $("lyricNow").textContent = lyrics.length ? "" : "(no lyrics found)";
-  ["chordPrev", "chordNext1", "chordNext2", "lyricPrev", "lyricNext"].forEach((id) => ($(id).textContent = ""));
+  ["chordNext1", "lyricNext"].forEach((id) => ($(id).textContent = ""));
   buildChordChart();
   updateViz(mixer.currentTime());
 }
@@ -982,10 +982,8 @@ function updateViz(t) {
   const tOrig = t * appliedTempo;
   if (chords.length) {
     const ci = lastIdx(chords, tOrig);
-    $("chordPrev").textContent = ci > 0 ? chordText(chords[ci - 1]) : "";
     $("chordNow").textContent = ci >= 0 ? chordText(chords[ci]) : chordText(chords[0]);
     $("chordNext1").textContent = chordText(chords[ci + 1]);
-    $("chordNext2").textContent = chordText(chords[ci + 2]);
   }
   if (lyrics.length) {
     const li = lastIdx(lyrics, tOrig);
