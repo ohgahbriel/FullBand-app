@@ -6,16 +6,18 @@
 // to view it, the same way they'd paste it into a text editor.
 
 // A deliberately bounded chord-token matcher: root note, optional accidental,
-// then one recognized quality/extension (m, 7, m7, maj7, sus4, sus2, dim,
-// aug, add9, bare 6/9/11/13, or M), an optional parenthesized alteration
-// like "(b5)", and an optional slash bass note. Not a full chord-theory
-// parser — narrow enough that ordinary capitalized words ("Baby", "Give")
-// don't match, since real chord notation always ends in one of these
-// suffixes and plain words don't. Exotic notations outside this list (e.g.
-// Brazilian "7M") just fall through to being treated as a lyric line instead
-// of a chord line — a safe, non-crashing degradation.
+// then one recognized quality/extension — US notation (m, 7, m7, maj7, sus4,
+// sus2, dim, aug, add9, bare 6/9/11/13) as well as the Brazilian convention
+// of suffixing "M" for major (7M/9M/11M/13M meaning maj7/maj9/etc, as used on
+// sites like CifraClub) — an optional parenthesized alteration like "(b5)",
+// and an optional slash bass note. Not a full chord-theory parser — narrow
+// enough that ordinary capitalized words ("Baby", "Give") don't match, since
+// real chord notation always ends in one of these suffixes and plain words
+// don't. Exotic notations outside this list just fall through to being
+// treated as a lyric line instead of a chord line — a safe, non-crashing
+// degradation.
 const CHORD_TOKEN =
-  /^[A-G](?:#|b)?(?:maj7|m7|m|7|sus4|sus2|dim|aug|add\d+|6|9|11|13|M)?(?:\([^)]{1,6}\))?(?:\/[A-G](?:#|b)?)?$/;
+  /^[A-G](?:#|b)?(?:maj7|m7|M7|7M|9M|11M|13M|m|7|9|11|13|sus4|sus2|dim|aug|add\d+|6|M)?(?:\([^)]{1,6}\))?(?:\/[A-G](?:#|b)?)?$/;
 const LABEL_LINE = /^\s*\[.+\]\s*$/; // e.g. "[Chorus]", "[Verse 1]" — dropped, not synced
 
 function isChordLine(line) {
